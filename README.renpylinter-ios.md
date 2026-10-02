@@ -15,6 +15,9 @@ changes. This branch keeps that version and the original patch series.
 - Direction queries use the matching UIWindowScene, using effectiveGeometry on
   iOS 26+, interfaceOrientation on iOS 13–25, and the legacy getter only before
   iOS 13. Unknown orientation does not trigger a frame flip or display rotation.
+- `ios-window-size-events.diff` refreshes SDL display modes from the window scene
+  on layout and prevents generic fullscreen code from overriding UIKit resize
+  events with cached display dimensions.
 - The existing layout path remains responsible for SDL resize events and drawable
   resizing. There is no foreground glViewport override or UIApplication swizzle.
 

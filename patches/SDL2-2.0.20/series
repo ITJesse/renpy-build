@@ -15,3 +15,4 @@ x11-ime.diff
 android-alooper-fix.diff
 missing-usb-name-crash.diff
 ios-scene-geometry.diff
+ios-window-size-events.diff

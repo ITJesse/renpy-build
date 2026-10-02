@@ -1,0 +1,108 @@
+RenPyLinter: synchronize scene layout with SDL display modes and logical size.
+The scene-based app host does not receive UIApplication's deprecated status-bar
+orientation notification. UIKit resize events must not be overwritten by cached
+fullscreen-mode dimensions after SetWindowFullscreen returns.
+
+--- a/src/video/SDL_video.c
++++ b/src/video/SDL_video.c
+@@ -1226,7 +1226,9 @@
+         SDL_DisplayMode fullscreen_mode;
+         if (SDL_GetWindowDisplayMode(window, &fullscreen_mode) == 0) {
+             if (SDL_SetDisplayModeForDisplay(SDL_GetDisplayForWindow(window), &fullscreen_mode) == 0) {
+-#ifndef ANDROID
++/* UIKit's layout callback reports the actual window bounds, which
++                 * can differ from a cached fullscreen display mode. */
++#if !defined(ANDROID) && !defined(SDL_VIDEO_DRIVER_UIKIT)
+                 /* Android may not resize the window to exactly what our fullscreen mode is, especially on
+                  * windowed Android environments like the Chromebook or Samsung DeX.  Given this, we shouldn't
+                  * use fullscreen_mode.w and fullscreen_mode.h, but rather get our current native size.  As such,
+@@ -1439,7 +1441,9 @@
+ 
+                 /* Generate a mode change event here */
+                 if (resized) {
+-#ifndef ANDROID
++/* UIKit's layout callback reports the actual window bounds, which
++                 * can differ from a cached fullscreen display mode. */
++#if !defined(ANDROID) && !defined(SDL_VIDEO_DRIVER_UIKIT)
+                     /* Android may not resize the window to exactly what our fullscreen mode is, especially on
+                      * windowed Android environments like the Chromebook or Samsung DeX.  Given this, we shouldn't
+                      * use fullscreen_mode.w and fullscreen_mode.h, but rather get our current native size.  As such,
+--- a/src/video/uikit/SDL_uikitviewcontroller.m
++++ b/src/video/uikit/SDL_uikitviewcontroller.m
+@@ -199,6 +199,12 @@
+     int w = (int) size.width;
+     int h = (int) size.height;
+ 
++#if !TARGET_OS_TV
++    /* Scene-based hosts do not receive UIApplication's old orientation
++     * notification. Keep cached display modes in sync before fullscreen
++     * restoration can read them. Use this window's scene. */
++    UIKit_UpdateWindowDisplayOrientation(window);
++#endif
+     SDL_SendWindowEvent(window, SDL_WINDOWEVENT_RESIZED, w, h);
+ }
+ 
+--- a/src/video/uikit/SDL_uikitmodes.h
++++ b/src/video/uikit/SDL_uikitmodes.h
+@@ -49,6 +49,9 @@
+ extern int UIKit_GetDisplayDPI(_THIS, SDL_VideoDisplay * display, float * ddpi, float * hdpi, float * vdpi);
+ extern int UIKit_SetDisplayMode(_THIS, SDL_VideoDisplay * display, SDL_DisplayMode * mode);
+ extern void UIKit_QuitModes(_THIS);
++#if !TARGET_OS_TV
++extern void UIKit_UpdateWindowDisplayOrientation(SDL_Window *window);
++#endif
+ extern int UIKit_GetDisplayUsableBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect);
+ 
+ #endif /* SDL_uikitmodes_h_ */
+--- a/src/video/uikit/SDL_uikitmodes.m
++++ b/src/video/uikit/SDL_uikitmodes.m
+@@ -24,6 +24,7 @@
+ 
+ #include "SDL_system.h"
+ #include "SDL_uikitmodes.h"
++#include "SDL_uikitwindow.h"
+ 
+ #include "../../events/SDL_events_c.h"
+ 
+@@ -544,15 +545,14 @@
+ }
+ 
+ #if !TARGET_OS_TV
+-void SDL_OnApplicationDidChangeStatusBarOrientation()
+-{
+-    UIInterfaceOrientation orient = UIKit_GetInterfaceOrientation(nil, [UIScreen mainScreen]);
++static void
++UIKit_UpdateDisplayOrientation(SDL_VideoDisplay *display, UIInterfaceOrientation orient)
++{
+     BOOL isLandscape;
+     if (orient == UIInterfaceOrientationUnknown) {
+         return;
+     }
+     isLandscape = UIInterfaceOrientationIsLandscape(orient);
+-    SDL_VideoDisplay *display = SDL_GetDisplay(0);
+ 
+     if (display) {
+         SDL_DisplayMode *desktopmode = &display->desktop_mode;
+@@ -597,6 +597,22 @@
+         SDL_SendDisplayEvent(display, SDL_DISPLAYEVENT_ORIENTATION, orientation);
+     }
+ }
++
++void
++UIKit_UpdateWindowDisplayOrientation(SDL_Window *window)
++{
++    SDL_WindowData *data = (__bridge SDL_WindowData *)window->driverdata;
++    if (data.uiwindow != nil) {
++        UIKit_UpdateDisplayOrientation(SDL_GetDisplayForWindow(window),
++            UIKit_GetInterfaceOrientation(data.uiwindow, data.uiwindow.screen));
++    }
++}
++
++void SDL_OnApplicationDidChangeStatusBarOrientation()
++{
++    UIKit_UpdateDisplayOrientation(SDL_GetDisplay(0),
++        UIKit_GetInterfaceOrientation(nil, [UIScreen mainScreen]));
++}
+ #endif /* !TARGET_OS_TV */
+ 
+ #endif /* SDL_VIDEO_DRIVER_UIKIT */
