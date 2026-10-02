@@ -1,0 +1,24 @@
+name: Build SDL2 for RenPyLinter iOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependency
+        run: brew install autoconf
+      - name: Build device and simulator libraries
+        run: python3 tools/build_sdl2_ios.py
+      - name: Upload libraries and build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: renpylinter-sdl2-${{ github.sha }}
+          path: dist/renpylinter-sdl2/
+          if-no-files-found: error
