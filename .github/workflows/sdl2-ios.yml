@@ -1,6 +1,9 @@
 name: Build SDL2 for RenPyLinter iOS
 
 on:
+  push:
+    branches:
+      - renpylinter-ios
   workflow_dispatch:
 
 permissions:
