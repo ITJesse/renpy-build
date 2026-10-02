@@ -22,3 +22,45 @@ jobs:
           name: renpylinter-sdl2-${{ github.sha }}
           path: dist/renpylinter-sdl2/
           if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: renpylinter-sdl2-${{ github.sha }}
+          path: bundle
+      - name: Package and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          RELEASE_TAG: sdl2-ios-${{ github.run_number }}-${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd bundle && sha256sum --check SHA256SUMS)
+          archive="renpylinter-sdl2-ios-arm64.tar.gz"
+          tar -czf "$archive" -C bundle .
+          sha256sum "$archive" > "$archive.sha256"
+          cat > release-notes.md <<EOF
+          SDL 2.0.20 with Ren'Py patches and the iOS scene geometry fix.
+
+          - Device: arm64 (release/libSDL2.a)
+          - Simulator: arm64 (debug/libSDL2.a)
+          - Source commit: $SOURCE_COMMIT
+          - Minimum deployment target: iOS 15.6
+
+          The archive includes build-info.json, SDL's license and SHA256SUMS.
+          Only SDL2 is compiled. Ren'Py, SDL_image and MetalANGLE are not rebuilt.
+          Build success does not establish application or older iOS runtime compatibility.
+          EOF
+          gh release create "$RELEASE_TAG" \
+            --repo "$GH_REPO" --target "$SOURCE_COMMIT" \
+            --title "SDL2 2.0.20 for RenPyLinter iOS ($RELEASE_TAG)" \
+            --notes-file release-notes.md \
+            "$archive" "$archive.sha256" bundle/build-info.json

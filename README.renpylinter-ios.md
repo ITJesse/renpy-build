@@ -40,7 +40,10 @@ No Xcode or compiler cache paths are changed. Only the `build/libSDL2.la`
 target is compiled; SDL2main, SDL2_test, SDL_image and Ren'Py are excluded.
 
 The manually triggered `Build SDL2 for RenPyLinter iOS` Actions workflow runs
-this same script. Download its artifact after success:
+this same script. After a successful build, it publishes a GitHub Release tagged
+`sdl2-ios-<run number>-<attempt>`, targeting the exact source commit. The release
+contains `renpylinter-sdl2-ios-arm64.tar.gz`, its SHA-256 checksum, and build-info.json.
+Actions artifacts are also retained. Archive contents:
 
 | Artifact | Platform |
 | --- | --- |
