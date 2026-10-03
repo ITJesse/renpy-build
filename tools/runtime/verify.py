@@ -33,6 +33,10 @@ def verify(root):
             if not mins or set(mins)!={info['minimum_ios']}: raise ValueError('Wrong deployment target: '+str(lib)+' '+str(set(mins)))
             symbols=command('xcrun','nm','-gU',str(lib))
             if not re.search(r'\b'+re.escape(symbol)+r'$',symbols,re.M): raise ValueError('Missing '+symbol)
+        python_symbols=command('xcrun','nm','-gU',str(root/'platforms'/platform/('lib'+py+'.a')))
+        prefix='_PyInit_' if info['python_version'].startswith('3') else '_init'
+        for module in ['_ssl','_hashlib','_ctypes','_socket','zlib']:
+            if not re.search(r'\b'+re.escape(prefix+module)+r'$',python_symbols,re.M): raise ValueError('Missing required Python module '+module)
         if info['python_version'].startswith('3'):
             launcher_symbols=command('xcrun','nm','-gU',str(root/'platforms'/platform/'librenpython.a'))
             if not re.search(r'\b_launcher_main_wide$',launcher_symbols,re.M): raise ValueError('Missing wide launcher entry point')

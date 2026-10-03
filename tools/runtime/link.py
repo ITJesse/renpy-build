@@ -20,11 +20,12 @@ def link(core,dependencies,sdk,minimum,destination,framework_root=None):
         raise RuntimeError('Linker did not prove rejection of undefined symbols: '+negative.stderr)
     libraries=sorted(core.glob('*.a'))
     expected={'librenpy.a','librenpython.a'}
-    if not expected<={p.name for p in libraries}: raise ValueError('Missing engine libraries')
+    if len(libraries)!=3 or not expected<={p.name for p in libraries} or sum(p.name.startswith('libpython') for p in libraries)!=1:
+        raise ValueError('Expected exactly the three newly built engine libraries')
     command=['xcrun','--sdk',sdk,'clang++','-target',target,'-isysroot',sdkroot,'-dynamiclib',
              '-Wl,-fatal_warnings','-o',str(destination)]
     for p in libraries: command+=['-Wl,-force_load,'+str(p)]
-    deps=[p for p in sorted(dependencies.glob('*.a')) if p.name not in {x.name for x in libraries} and p.name not in {'libSDL2main.a','libSDL2_test.a'}]
+    deps=[p for p in sorted(dependencies.glob('*.a')) if not p.name.startswith(('libpython','librenpy')) and p.name not in {'libSDL2main.a','libSDL2_test.a'}]
     command+=list(map(str,deps))
     # zlib/bzip2 are the pinned archives above; clang++ supplies libc++.
     command+=['-liconv','-lresolv','-lobjc']

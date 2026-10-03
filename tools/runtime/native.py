@@ -112,7 +112,17 @@ def python_post(c):
     import tasks.python3 as p
     c.generate('{{ source }}/Python-{{ version }}-Setup.stdlib','Modules/Setup.stdlib')
     c.generate('{{ source }}/Python-{{ version }}-Setup.stdlib','Modules/Setup')
+    # Configure's original Makefile still describes shared optional modules.
+    # Regenerate it synchronously before make reads MODOBJS, using CPython's
+    # own rule; relying on same-second mtimes can archive only bootstrap code.
+    c.run('./Modules/makesetup -c Modules/config.c.in -s Modules Modules/Setup.local Modules/Setup.stdlib Modules/Setup.bootstrap Modules/Setup')
+    shutil.move(c.cwd/'config.c',c.cwd/'Modules/config.c')
     c.run('{{ make }} libpython'+'.'.join(p.version.split('.')[:2])+'.a')
+    import re
+    init_names=set(re.findall(r'\{\s*"[^"]+",\s*(PyInit_\w+)\s*\}',(c.cwd/'Modules/config.c').read_text()))
+    symbols=output('xcrun','nm','-gU',c.cwd/('libpython'+'.'.join(p.version.split('.')[:2])+'.a'))
+    missing=[name for name in sorted(init_names) if not re.search(r'\b_'+re.escape(name)+r'$',symbols,re.M)]
+    if not init_names or missing: raise RuntimeError('Incomplete static CPython module archive: '+str(missing))
     include=c.install/'include'/('python'+'.'.join(p.version.split('.')[:2]))
     include.mkdir(parents=True,exist_ok=True)
     shutil.copytree(c.cwd/'Include',include,dirs_exist_ok=True)
@@ -195,6 +205,18 @@ def package():
             for p in base.glob(pattern):
                 if p.is_file(): shutil.copy2(p,licenses/(project+'-'+p.name));found=True
         if not found: raise RuntimeError('Missing license: '+project)
+    # Preserve the exact notices for dependency headers used by native code,
+    # even though the corresponding dependency archives remain host-owned.
+    dependency_roots=[p for p in (ROOT/'tmp/build').iterdir() if '.ios-arm64' in p.name]
+    dependency_roots += [ROOT/'tmp/source'/name for name in LOCK['git_sources']]
+    for base in dependency_roots:
+        for directory in [base,*[p for p in base.iterdir() if p.is_dir() and p.name!='.git']]:
+            for pattern in ['LICENSE*','COPYING*','LICENCE*']:
+                for notice in directory.glob(pattern):
+                    if notice.is_file():
+                        dest=licenses/'dependencies'/base.name/notice.relative_to(base)
+                        dest.parent.mkdir(parents=True,exist_ok=True)
+                        shutil.copy2(notice,dest)
     shutil.copy2(ROOT/'docs/runtime-audit.md',out/'HOST-INTEGRATION.md')
     shutil.copy2(ROOT/'tools/runtime/host-reference.json',out/'host-reference.json')
     info={'schema_version':1,'engine_version':LOCK['engine'],'python_version':LOCK['python'],
@@ -210,6 +232,8 @@ def package():
     info['dynamic_dependencies']={'Live2D':{'required_symbols':sorted(set(re.findall(r'load_live2d_function\(object, "([^"]+)"\)',(ROOT/'renpy/renpy/gl2/live2dcsm.pxi').read_text()))),'binding':'runtime-dlsym','provided_by':'host application'}}
     (out/'build-commands.json').write_text(json.dumps(COMMANDS,indent=2)+'\n')
     info['compiler_commands']='build-commands.json'
+    inittab=(ROOT/'tmp/build/librenpy.ios-arm64-py3/inittab.c').read_text()
+    info['native_modules']=re.findall(r'\{ "([^"]+)",',inittab)
     (out/'build-info.json').write_text(json.dumps(info,indent=2)+'\n')
     (out/'SHA256SUMS').write_text(''.join(sha(p)+'  '+str(p.relative_to(out))+'\n' for p in sorted(out.rglob('*')) if p.is_file()))
     run(sys.executable,ROOT/'tools/runtime/verify.py',out)
@@ -238,6 +262,12 @@ def preflight(Context):
 
 
 def main():
+    argparse.ArgumentParser(description=__doc__).parse_args()
+    if sys.version_info[:3] != (3,12,8):
+        raise SystemExit('Run the build driver with Python 3.12.8, as pinned in the workflow')
+    if os.environ.get('PYTHONHASHSEED') != '0':
+        os.environ['PYTHONHASHSEED']='0'
+        os.execv(sys.executable,[sys.executable,str(Path(__file__).resolve()),*sys.argv[1:]])
     if sys.platform != 'darwin': raise SystemExit('macOS required')
     for sdk in ['iphoneos','iphonesimulator']:
         if output('xcrun','--sdk',sdk,'--show-sdk-version') != LOCK['sdk']:
