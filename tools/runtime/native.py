@@ -208,6 +208,28 @@ def package():
     run(sys.executable,ROOT/'tools/runtime/verify.py',out)
 
 
+
+def preflight(Context):
+    args=SimpleNamespace(sdl=False,nostrip=True)
+    for arch in ['host','arm64','sim-arm64']:
+        c=Context('ios',arch,'3',ROOT,args)
+        c.set_names('host' if arch=='host' else 'python','preflight','runtime-preflight')
+        expected='TARGET_OS_OSX && !TARGET_OS_IPHONE' if arch=='host' else ('TARGET_OS_IPHONE && '+('TARGET_OS_SIMULATOR' if arch=='sim-arm64' else '!TARGET_OS_SIMULATOR'))
+        (c.cwd/'probe.c').write_text('#include <sys/types.h>\n#include <TargetConditionals.h>\n#if !defined(__arm64__) || !('+expected+')\n#error Wrong compilation platform\n#endif\nint main(void) { return 0; }\n')
+        c.run('{{ CPP }} {{ CPPFLAGS }} probe.c -o probe.i')
+        if arch=='host':
+            c.run('{{ CC }} {{ CFLAGS }} {{ LDFLAGS }} probe.c -o probe')
+            c.run('./probe')
+        else:
+            c.run('{{ CC }} {{ CFLAGS }} -c probe.c -o probe.o')
+            loads=output('xcrun','otool','-l',c.cwd/'probe.o')
+            import re
+            platforms=set(re.findall(r'^\s*platform\s+(\w+)',loads,re.M))
+            expected_platform={'7','IOSSIMULATOR'} if arch=='sim-arm64' else {'2','IOS'}
+            if not platforms or not platforms<=expected_platform: raise RuntimeError('Incorrect preflight Mach-O platform')
+            if set(re.findall(r'^\s*minos\s+([\d.]+)',loads,re.M))!={LOCK['minimum_ios']}: raise RuntimeError('Incorrect preflight deployment target')
+
+
 def main():
     if sys.platform != 'darwin': raise SystemExit('macOS required')
     for sdk in ['iphoneos','iphonesimulator']:
@@ -223,6 +245,17 @@ def main():
         if version not in observed: raise RuntimeError('Build tool drift: '+name+' expected '+version+' got '+observed)
     for name,digest in LOCK['inputs'].items():
         if sha(ROOT/name) != digest: raise SystemExit('Source/patch checksum mismatch: '+name)
+    if output('git','-C',ROOT,'status','--porcelain'):
+        raise RuntimeError('Build requires a committed, clean source checkout; preserve unrelated changes before building')
+    fingerprint={'commit':output('git','-C',ROOT,'rev-parse','HEAD'),'lock_sha256':sha(ROOT/'tools/runtime/lock.json'),
+                 'xcode':output('xcodebuild','-version')}
+    stamp=ROOT/'tmp/runtime-build-state.json'
+    if stamp.exists():
+        if json.loads(stamp.read_text())!=fingerprint: raise RuntimeError('Existing build belongs to different inputs; review generated files before an explicit clean')
+    elif (ROOT/'tmp/complete').exists() and any((ROOT/'tmp/complete').iterdir()):
+        raise RuntimeError('Existing upstream build has no runtime provenance stamp; refusing to reuse it')
+    stamp.parent.mkdir(parents=True,exist_ok=True)
+    stamp.write_text(json.dumps(fingerprint,indent=2)+'\n')
     fetch('https://github.com/renpy/renpy',LOCK['renpy_commit'],ROOT/'renpy')
     cubism = LOCK['cubism']
     archive = ROOT/'tars'/cubism['filename']
@@ -264,6 +297,7 @@ def main():
                              'compiler_environment':{k:context.environ.get(k) for k in ['CC','CXX','CFLAGS','CXXFLAGS','CPPFLAGS','LDFLAGS','AR','RANLIB']}})
             super().__init__(command,context)
     runner.RunCommand=RecordedGroupCommand
+    preflight(Context)
     tasks.python3.common_post=python_post
     selected={'metalangle','zlib','bzip2','xz','brotli','openssl','libffi','libpng','libjpeg_turbo','libwebp',
               'libyuv','aom','libavif','hostpython3','python3','pyobjus','sdl2','sdl2_image','ffmpeg',

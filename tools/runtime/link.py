@@ -24,7 +24,10 @@ def link(core,dependencies,sdk,minimum,destination,framework_root=None):
     log=destination.with_suffix('.link.log')
     with log.open('w') as f:
         f.write(repr(command)+'\n');f.flush()
-        subprocess.run(command,stdout=f,stderr=subprocess.STDOUT,check=True)
+        result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+        f.write(result.stdout)
+        print(result.stdout,flush=True)
+        result.check_returncode()
     return {'type':'closed-symbol-dylib-link','sdk':sdk,'target':target,'command':command,
             'dependency_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in deps},
             'executable_sha256':hashlib.sha256(destination.read_bytes()).hexdigest(), 'executed':False}

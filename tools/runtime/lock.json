@@ -168,5 +168,10 @@
       "b61d65fdc620dbe19892d2419b77340341e76084"
     ]
   },
-  "source_date_epoch": 1778645821
+  "source_date_epoch": 1778645821,
+  "upstream_environment": {
+    "ubuntu": "24.04",
+    "llvm_major": "18",
+    "cython": "3.1.4"
+  }
 }
