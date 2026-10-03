@@ -10,6 +10,7 @@ import subprocess
 import sys
 import urllib.request
 import zipfile
+import tarfile
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,7 +54,7 @@ def native_environment(c):
     for key,prefix in [('cross_config','arm-apple-darwin'),('sdl_cross_config','arm-ios-darwin21'),('ffi_cross_config','aarch64-ios-darwin21')]:
         c.var(key, '' if host else '--host='+prefix+' --build='+build)
     c.var('configure_cross','')
-    flags = '-O2 -fPIC -DRENPY_BUILD -I'+str(c.install/'include')
+    flags = '-O2 -fPIC -ffile-prefix-map='+str(ROOT)+'=/renpy-build -DRENPY_BUILD -I'+str(c.install/'include')
     target = '' if host else 'arm64-apple-ios'+LOCK['minimum_ios']+('-simulator' if c.arch == 'sim-arm64' else '')
     if target:
         flags += ' -target '+target+' -isysroot '+sdkroot+' -DSDL_MAIN_HANDLED'
@@ -140,9 +141,19 @@ def package():
     shutil.copytree(ROOT/'tmp/build/python3.ios-arm64-py3'/('Python-'+LOCK['python'])/'Lib',stdlib,
                     ignore=shutil.ignore_patterns('test','tests','idlelib','tkinter','ensurepip','__pycache__','*.pyc'))
     # Source-only distribution avoids bytecode from the build host leaking into the bundle.
-    packages=json.loads((ROOT/'tools/runtime/packages.json').read_text())
     run(ROOT/'tmp/host/bin/python3','-m','pip','install','--no-compile','--no-deps','--only-binary=:all:',
-        '--target',stdlib,*[k+'=='+v for k,v in packages.items()])
+        '--platform','any','--abi','none','--implementation','py','--require-hashes',
+        '--target',stdlib,'-r',ROOT/'tools/runtime/resources-requirements.txt')
+    for name,item in LOCK['resource_sources'].items():
+        archive=ROOT/'tmp'/item['filename']
+        if not archive.exists(): run('curl','--fail','--location',item['url'],'--output',archive)
+        if sha(archive)!=item['sha256']: raise RuntimeError('Resource source checksum mismatch: '+name)
+        with tarfile.open(archive) as t:
+            for member in t.getmembers():
+                path=Path(member.name)
+                relative=Path(*path.parts[1:])
+                if member.isfile() and relative.suffix=='.py' and (str(relative)=='pefile.py' or str(relative).startswith('ordlookup/')):
+                    dest=stdlib/relative;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(t.extractfile(member).read())
     for fn in ['__init__.py','dylib_manager.py','objc_py_types.py','protocols.py']:
         d=stdlib/'pyobjus'; d.mkdir(exist_ok=True)
         shutil.copy2(ROOT/'tmp/build/pyobjus.ios-arm64-py3/pyobjus/pyobjus'/fn,d/fn)
@@ -156,9 +167,16 @@ def package():
     shutil.copy2(ROOT/'renpy/src/libhydrogen/LICENSE',licenses/'libhydrogen.txt')
     with zipfile.ZipFile(ROOT/'tars'/LOCK['cubism']['filename']) as z:
         (licenses/'Cubism-Core.md').write_bytes(z.read(LOCK['cubism']['directory']+'/Core/LICENSE.md'))
+    for project,base in [('pyobjus',ROOT/'tmp/build/pyobjus.ios-arm64-py3/pyobjus'),('brotli',ROOT/'tmp/build/brotli.ios-arm64/brotli-1.1.0')]:
+        found=False
+        for pattern in ['LICENSE*','COPYING*']:
+            for p in base.glob(pattern):
+                if p.is_file(): shutil.copy2(p,licenses/(project+'-'+p.name));found=True
+        if not found: raise RuntimeError('Missing license: '+project)
     shutil.copy2(ROOT/'docs/runtime-audit.md',out/'HOST-INTEGRATION.md')
+    shutil.copy2(ROOT/'tools/runtime/host-reference.json',out/'host-reference.json')
     info={'schema_version':1,'engine_version':LOCK['engine'],'python_version':LOCK['python'],
-          'source_commit':output('git','-C',ROOT,'rev-parse','HEAD'),'source_lock':LOCK,
+          'source_commit':output('git','-C',ROOT,'rev-parse','HEAD'),'source_lock':LOCK,'resource_requirements_sha256':sha(ROOT/'tools/runtime/resources-requirements.txt'),
           'patches':{str(p.relative_to(ROOT)):sha(p) for p in [ROOT/'runtime/librenpython3.c',*sorted((ROOT/'tools/runtime').glob('*.py'))]},
           'toolchain':{'xcode':output('xcodebuild','-version'),'clang':output('xcrun','clang','--version'),
                        'autoconf':output('autoconf','--version').splitlines()[0], 'cmake':output('cmake','--version').splitlines()[0]},
@@ -177,6 +195,12 @@ def main():
             raise SystemExit('SDK mismatch: requires '+LOCK['sdk'])
     if output('xcodebuild','-version').splitlines()[0] != 'Xcode '+LOCK['xcode']:
         raise SystemExit('Xcode mismatch')
+    os.environ['ZERO_AR_DATE']='1'
+    os.environ['SOURCE_DATE_EPOCH']=output('git','-C',ROOT,'show','-s','--format=%ct',LOCK['build_commit'])
+    tool_commands={'autoconf':'autoconf','automake':'automake','libtool':'glibtool','pkgconf':'pkg-config','cmake':'cmake','ninja':'ninja'}
+    for name,version in LOCK['build_tools'].items():
+        observed=output(tool_commands[name],'--version').splitlines()[0]
+        if version not in observed: raise RuntimeError('Build tool drift: '+name+' expected '+version+' got '+observed)
     for name,digest in LOCK['inputs'].items():
         if sha(ROOT/name) != digest: raise SystemExit('Source/patch checksum mismatch: '+name)
     fetch('https://github.com/renpy/renpy',LOCK['renpy_commit'],ROOT/'renpy')

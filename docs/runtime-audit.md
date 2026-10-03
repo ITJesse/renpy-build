@@ -7,7 +7,7 @@ Status: 8.5.3 native macOS build implementation under validation; no engine rele
 `tools/runtime/versions.json` records eight official `renpy/renpy-build` tag commits,
 verified directly with `git ls-remote https://github.com/renpy/renpy-build.git`.
 The independent `renpy/renpy` tag commits are also pinned. 7.5.3 and 8.0.3 share
-an upstream build-system commit, but use different engine source commits and Python versions.
+an upstream build-system commit, and an engine-source commit, but use different Python versions.
 No version branch is derived from the latest branch.
 
 ## Build route

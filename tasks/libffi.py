@@ -10,6 +10,8 @@ def unpack(c: Context):
 
     c.var("version", version)
     c.run("tar xzf {{source}}/libffi-{{version}}.tar.gz")
+    c.chdir("libffi-{{version}}")
+    c.patch("libffi-darwin-cfi.diff")
 
 
 @task()

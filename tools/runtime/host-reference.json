@@ -1,0 +1,42 @@
+{
+  "repository_commit": "2b605f6e8321cde952383cd9f7d442dbb508b600",
+  "read_only": true,
+  "host_overlays": {
+    "753": {
+      "RenPyLinter/Platform/RenPy/753/main.py": "6fd60b17c4ea91bb69ab704f0c9e625f01c7aec850eee5b024faf0404f9ebd4a",
+      "RenPyLinter/Platform/RenPy/753/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    },
+    "782": {
+      "RenPyLinter/Platform/RenPy/782/main.py": "2319a1c75604c9d39ec6c1ff4347fbc87a76f69f61782bd8bd5bd0c97bd257ce",
+      "RenPyLinter/Platform/RenPy/782/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    },
+    "803": {
+      "RenPyLinter/Platform/RenPy/803/main.py": "5382e6f3396e63d7416c8dfaec170a9180f258d34c421ba500a59ca20cfedf85",
+      "RenPyLinter/Platform/RenPy/803/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    },
+    "813": {
+      "RenPyLinter/Platform/RenPy/813/main.py": "a973fb08f94d9c3d2c7d31a9182202cce86e16913f5cc6e9a7ab37df3aa20d05",
+      "RenPyLinter/Platform/RenPy/813/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    },
+    "823": {
+      "RenPyLinter/Platform/RenPy/823/main.py": "a973fb08f94d9c3d2c7d31a9182202cce86e16913f5cc6e9a7ab37df3aa20d05",
+      "RenPyLinter/Platform/RenPy/823/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    },
+    "837": {
+      "RenPyLinter/Platform/RenPy/837/main.py": "5c3f596d38e8dc73f2f14104de57591c1775e57cca16727fd0ce9d59e372bd08",
+      "RenPyLinter/Platform/RenPy/837/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    },
+    "841": {
+      "RenPyLinter/Platform/RenPy/841/main.py": "5c3f596d38e8dc73f2f14104de57591c1775e57cca16727fd0ce9d59e372bd08",
+      "RenPyLinter/Platform/RenPy/841/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    },
+    "853": {
+      "RenPyLinter/Platform/RenPy/853/main.py": "5c3f596d38e8dc73f2f14104de57591c1775e57cca16727fd0ce9d59e372bd08",
+      "RenPyLinter/Platform/RenPy/853/renpy/common/helper_tool.rpy": "dbfad7060b975196f2241a6d172d431979b96cc148d90361a07a864dc76086c0"
+    }
+  },
+  "launcher_patch_reference": {
+    "path": "docs/librenpython-edits-summary.md",
+    "sha256": "3cc937694ffcdfeaa2f31cd1d5148f4df6fb6080b33c5bd68d04b61f7f601c9d"
+  }
+}

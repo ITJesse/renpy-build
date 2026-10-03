@@ -119,7 +119,8 @@
     "patches/zsync-0.6.2.tar.bz2": "0b9d53433387aa4f04634a6c63a5efa8203070f2298af72a705f9be3dda65af2",
     "patches/zsync-compress-5.diff": "87ff8f31e2496026f6a74be7179d6d88ff98d77ceab562ab627c1709337052d2",
     "patches/zsync-includes-strings-h.diff": "8ca18d8241438d50e0402207646c59fdcd25aea9e87a4e978d6d0edb34c1095e",
-    "patches/zsync-no-isastty.diff": "0bbda71d959a52d85236a4e1a6ebe2b1d543f4fade065ba6eae782c4c2a15472"
+    "patches/zsync-no-isastty.diff": "0bbda71d959a52d85236a4e1a6ebe2b1d543f4fade065ba6eae782c4c2a15472",
+    "patches/libffi-darwin-cfi.diff": "a87b89d73213c0fbbf7dfd614cf272b6611d9c6e25f1fe2df1e49a1a5f8c7a51"
   },
   "build_repository": "https://github.com/renpy/renpy-build",
   "build_tag": "renpy-8.5.3.26051504",
@@ -128,5 +129,43 @@
     "directory": "CubismSdkForNative-5-r.5-beta.3",
     "url": "https://cubism.live2d.com/sdk-native/bin/CubismSdkForNative-5-r.5-beta.3.zip",
     "sha256": "ace88fc481fa18ba7697c443ef79c26f06311cf184a40bc2887415b6db7c56ab"
+  },
+  "resource_sources": {
+    "pefile": {
+      "url": "https://files.pythonhosted.org/packages/48/30/4559d06bad5bb627733dac1ef28c34f5e35f1461247ba63e5f6366901277/pefile-2022.5.30.tar.gz",
+      "sha256": "a5488a3dd1fd021ce33f969780b88fe0f7eebb76eb20996d7318f307612a045b",
+      "filename": "pefile-2022.5.30.tar.gz"
+    }
+  },
+  "build_tools": {
+    "autoconf": "2.73",
+    "automake": "1.18.1",
+    "libtool": "2.6.2",
+    "pkgconf": "3.0.7",
+    "cmake": "3.31.6",
+    "ninja": "1.11.1"
+  },
+  "upstream_dependencies": {
+    "sdl2": [
+      "2.0.20"
+    ],
+    "ffmpeg": [
+      "4.3.1"
+    ],
+    "libffi": [
+      "3.4.5"
+    ],
+    "openssl": [
+      "3.3.2"
+    ],
+    "freetype": [
+      "2.13.3"
+    ],
+    "harfbuzz": [
+      "8.0.1"
+    ],
+    "pyobjus": [
+      "b61d65fdc620dbe19892d2419b77340341e76084"
+    ]
   }
 }
