@@ -52,7 +52,7 @@ published):
 ```sh
 python3 tools/runtime/driver.py prepare --src SRC
 python3 tools/runtime/driver.py deps --family modern --src SRC --out out/deps \
-    --sdl2 renpylinter-sdl2-ios-arm64.tar.gz --allow-xcode-mismatch
+    --sdl2 renpylinter-sdl2-ios-arm64.tar.gz --trial
 ```
 
 ## How renpy-build runs on macOS

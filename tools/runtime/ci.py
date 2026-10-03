@@ -172,6 +172,8 @@ def release_prepare(args):
         if (Path(tmp) / "build-info.json").read_bytes() != (DIST / "build-info.json").read_bytes():
             raise SystemExit("build-info.json asset differs from the one in the tarball")
 
+    if info.get("trial", True):
+        raise SystemExit("trial bundles are never released")
     if not info["toolchain"].get("matches_lock"):
         raise SystemExit("bundle was not built with the locked Xcode")
     if info["kind"] != args.kind:

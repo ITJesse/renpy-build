@@ -301,11 +301,11 @@ def deps(args):
     if source_version not in family["members"]:
         raise SystemExit(f"{source_version} is not a member of {args.family}")
     check_branch(src, lock, source_version)
-    toolchain = check_xcode(lock, args.allow_xcode_mismatch)
+    toolchain = check_xcode(lock, args.trial)
 
     computed = recipe.compute(src, family["deps_modules"])
     recipe_matches = family["recipe_sha256"] == computed["recipe_sha256"]
-    if not recipe_matches and source_version == baseline["version"]:
+    if not recipe_matches and source_version == baseline["version"] and not args.trial:
         raise SystemExit(f"families.json recipe_sha256 for {args.family} is {family['recipe_sha256']}, "
                          f"checkout computes {computed['recipe_sha256']}")
 
@@ -418,14 +418,15 @@ def deps(args):
         "source_date_epoch": commit_time(src),
         "build_seconds": int(time.time() - started),
     }
-    finish(out, info)
+    finish(out, info, args.trial)
 
 
 def baseline_python(config, version):
     return config["versions"][version]["python"]
 
 
-def finish(out, info):
+def finish(out, info, trial):
+    info["trial"] = trial
     info["files"] = {str(p.relative_to(out)): bundle.sha256(p) for p in bundle.files(out)}
     bundle.write_json(out / "build-info.json", info)
     bundle.write_sums(out)
@@ -529,7 +530,7 @@ def engine(args):
     lock = load_lock(src)
 
     check_branch(src, lock, args.version)
-    toolchain = check_xcode(lock, args.allow_xcode_mismatch)
+    toolchain = check_xcode(lock, args.trial)
     if lock["deps"]["family"] != version_cfg["family"]:
         raise SystemExit("lock and families.json disagree on the family")
 
@@ -656,7 +657,7 @@ def engine(args):
         "source_date_epoch": commit_time(src),
         "build_seconds": int(time.time() - started),
     }
-    finish(out, info)
+    finish(out, info, args.trial)
 
 
 def compile_flags(src, target, version_cfg):
@@ -698,8 +699,9 @@ def main():
 
     for name, p in sub.choices.items():
         if name != "prepare":
-            p.add_argument("--allow-xcode-mismatch", action="store_true",
-                           help="local trial builds only; CI never passes this")
+            p.add_argument("--trial", action="store_true",
+                           help="local trial build: tolerate a different Xcode and recipe; "
+                                "the bundle is marked trial and cannot be released")
     args = ap.parse_args()
     args.func(args)
 
