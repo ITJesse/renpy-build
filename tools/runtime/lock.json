@@ -120,7 +120,7 @@
     "patches/zsync-compress-5.diff": "87ff8f31e2496026f6a74be7179d6d88ff98d77ceab562ab627c1709337052d2",
     "patches/zsync-includes-strings-h.diff": "8ca18d8241438d50e0402207646c59fdcd25aea9e87a4e978d6d0edb34c1095e",
     "patches/zsync-no-isastty.diff": "0bbda71d959a52d85236a4e1a6ebe2b1d543f4fade065ba6eae782c4c2a15472",
-    "patches/libffi-darwin-cfi.diff": "a87b89d73213c0fbbf7dfd614cf272b6611d9c6e25f1fe2df1e49a1a5f8c7a51"
+    "patches/libffi-darwin-cfi.diff": "4bd9697f993bb25e2922ce8dfc28c9677877a7e4d7ca802d65ead9a737c9fa1b"
   },
   "build_repository": "https://github.com/renpy/renpy-build",
   "build_tag": "renpy-8.5.3.26051504",
@@ -167,5 +167,6 @@
     "pyobjus": [
       "b61d65fdc620dbe19892d2419b77340341e76084"
     ]
-  }
+  },
+  "source_date_epoch": 1778645821
 }

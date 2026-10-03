@@ -196,7 +196,7 @@ def main():
     if output('xcodebuild','-version').splitlines()[0] != 'Xcode '+LOCK['xcode']:
         raise SystemExit('Xcode mismatch')
     os.environ['ZERO_AR_DATE']='1'
-    os.environ['SOURCE_DATE_EPOCH']=output('git','-C',ROOT,'show','-s','--format=%ct',LOCK['build_commit'])
+    os.environ['SOURCE_DATE_EPOCH']=str(LOCK['source_date_epoch'])
     tool_commands={'autoconf':'autoconf','automake':'automake','libtool':'glibtool','pkgconf':'pkg-config','cmake':'cmake','ninja':'ninja'}
     for name,version in LOCK['build_tools'].items():
         observed=output(tool_commands[name],'--version').splitlines()[0]
