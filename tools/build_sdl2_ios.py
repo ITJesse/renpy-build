@@ -52,7 +52,7 @@ def main():
         run('patch', '--batch', '--fuzz=0', '-p1', '-i', str(patch), cwd=source)
         patches.append({'name': name, 'sha256': digest(patch)})
     run('sh', 'autogen.sh', cwd=source)
-    metadata = {'sdl': VERSION, 'source_sha256': SOURCE_SHA256,
+    metadata = {'optimization': '-Os', 'sdl': VERSION, 'source_sha256': SOURCE_SHA256,
                 'commit': output('git', '-C', str(ROOT), 'rev-parse', 'HEAD'),
                 'dirty': bool(output('git', '-C', str(ROOT), 'status', '--porcelain')),
                 'xcode': output('xcodebuild', '-version'), 'patches': patches, 'slices': {}}
@@ -64,7 +64,7 @@ def main():
         run('unzip', '-q', str(metal_zip), '-d', str(build))
         sdkroot = output('xcrun', '--sdk', sdk, '--show-sdk-path')
         target = f'{arch}-apple-ios15.6' + ('-simulator' if sdk == 'iphonesimulator' else '')
-        common = f'-target {target} -isysroot {sdkroot} -O2 -DSDL_MAIN_HANDLED -DRENPY_BUILD -DMETALANGLE -F{build}'
+        common = f'-target {target} -isysroot {sdkroot} -Os -DSDL_MAIN_HANDLED -DRENPY_BUILD -DMETALANGLE -F{build}'
         env = os.environ.copy()
         env.update(CC=output('xcrun', '--sdk', sdk, '--find', 'clang'),
                    CXX=output('xcrun', '--sdk', sdk, '--find', 'clang++'),
