@@ -173,5 +173,6 @@
     "ubuntu": "24.04",
     "llvm_major": "18",
     "cython": "3.1.4"
-  }
+  },
+  "optimization": "-Os"
 }

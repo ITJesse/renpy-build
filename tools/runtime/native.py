@@ -59,7 +59,7 @@ def native_environment(c):
     for key,prefix in [('cross_config','arm-apple-darwin'),('sdl_cross_config','arm-ios-darwin21'),('ffi_cross_config','aarch64-ios-darwin21')]:
         c.var(key, '' if host else '--host='+prefix+' --build='+build)
     c.var('configure_cross','')
-    flags = '-O2 -fPIC -ffile-prefix-map='+str(ROOT)+'=/renpy-build -DRENPY_BUILD -I'+str(c.install/'include')
+    flags = LOCK['optimization']+' -fPIC -ffile-prefix-map='+str(ROOT)+'=/renpy-build -DRENPY_BUILD -I'+str(c.install/'include')
     target = '' if host else 'arm64-apple-ios'+LOCK['minimum_ios']+('-simulator' if c.arch == 'sim-arm64' else '')
     if target:
         flags += ' -target '+target+' -isysroot '+sdkroot+' -DSDL_MAIN_HANDLED'
@@ -70,6 +70,10 @@ def native_environment(c):
     c.env('CPP',c.environ['CC']+' -E -isysroot '+sdkroot+(' -target '+target if target else ''))
     c.env('CFLAGS',flags)
     c.env('CXXFLAGS',flags+' -std=c++17')
+    c.env('OBJCFLAGS',flags)
+    c.env('OBJCXXFLAGS',flags+' -std=c++17')
+    # CPython's OPT defaults to -O3; pin its own variable as well as CFLAGS.
+    c.env('OPT',LOCK['optimization']+' -DNDEBUG')
     c.env('CPPFLAGS','-I'+str(c.install/'include'))
     c.env('LDFLAGS',('-target '+target+' ' if target else '')+'-isysroot '+sdkroot+' -L'+str(c.install/'lib'))
     c.env('PATH','{{ host }}/bin:{{ PATH }}')
@@ -84,8 +88,11 @@ def native_environment(c):
     build_sdk=output('xcrun','--sdk','macosx','--show-sdk-path')
     build_cc=output('xcrun','--sdk','macosx','--find','clang')
     for key in ['CC_BUILD','CC_FOR_BUILD','BUILD_CC']:
-        c.env(key,build_cc+' -target arm64-apple-macos11.0 -isysroot '+build_sdk)
+        c.env(key,build_cc+' '+LOCK['optimization']+' -target arm64-apple-macos11.0 -isysroot '+build_sdk)
     cmake = '-G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX='+str(c.install)
+    # CMake appends Release flags after environment CFLAGS/CXXFLAGS.
+    for language in ['C','CXX','OBJC','OBJCXX','ASM']:
+        cmake += ' '+shlex.quote('-DCMAKE_'+language+'_FLAGS_RELEASE='+LOCK['optimization']+' -DNDEBUG')
     if not host:
         cmake += (' -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT='+sdkroot+
                   ' -DCMAKE_OSX_DEPLOYMENT_TARGET='+LOCK['minimum_ios']+' -DCMAKE_MACOSX_BUNDLE=OFF'+
@@ -223,7 +230,7 @@ def package():
           'source_commit':output('git','-C',ROOT,'rev-parse','HEAD'),'source_lock':LOCK,'resource_requirements_sha256':sha(ROOT/'tools/runtime/resources-requirements.txt'),
           'build_tool_requirements_sha256':sha(ROOT/'tools/runtime/build-tool-requirements.txt'),
           'patches':{str(p.relative_to(ROOT)):sha(p) for p in [ROOT/'runtime/librenpython3.c',*sorted((ROOT/'tools/runtime').glob('*.py'))]},
-          'toolchain':{'xcode':output('xcodebuild','-version'),'clang':output('xcrun','clang','--version'),
+          'toolchain':{'optimization':LOCK['optimization'],'xcode':output('xcodebuild','-version'),'clang':output('xcrun','clang','--version'),
                        'autoconf':output('autoconf','--version').splitlines()[0], 'cmake':output('cmake','--version').splitlines()[0]},
           'platforms':['iphoneos-arm64','iphonesimulator-arm64'],'minimum_ios':LOCK['minimum_ios'],
           'resource_format':'source-only','host_adaptations':'main.py and helper_tool.rpy remain host-owned; see HOST-INTEGRATION.md',

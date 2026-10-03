@@ -73,6 +73,9 @@ def build(c: Context):
         --strip="{{ STRIP }}"
         --nm="{{ NM }}"
 
+{% if c.platform == "ios" %}
+        --optflags=-Os
+{% endif %}
         --extra-cflags="{{ CFLAGS }}"
         --extra-cxxflags="{{ CFLAGS }}"
         --extra-ldflags="{{ LDFLAGS }}"
@@ -206,6 +209,9 @@ def build_web(c: Context):
         --strip="{{ STRIP }}"
         --nm="{{ NM }}"
 
+{% if c.platform == "ios" %}
+        --optflags=-Os
+{% endif %}
         --extra-cflags="{{ CFLAGS }}"
         --extra-cxxflags="{{ CFLAGS }}"
         --extra-ldflags="{{ LDFLAGS }}"

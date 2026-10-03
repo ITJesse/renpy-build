@@ -79,3 +79,11 @@ branch. After successful verification, the release job allocates a new `renpy-ru
 creates it at the exact source commit, and refuses tag collisions. It publishes
 the complete archive, outer SHA-256, build-info.json and the internal manifest.
 Old tags and assets are never replaced.
+
+## Optimization policy
+
+All native iOS runtime builds use `-Os`, including the launcher, CPython,
+Ren'Py extensions and rebuilt dependencies. The lockfile and build metadata
+record this policy. CMake Release flags, CPython OPT and FFmpeg optflags
+are explicit so their defaults cannot restore `-O3`. Both targets remain arm64.
+Existing releases retain their original compiler settings and are not replaced.
