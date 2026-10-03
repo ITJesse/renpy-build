@@ -1,0 +1,20 @@
+{
+  "engine": "8.5.3",
+  "renpy_build_tag": "renpy-8.5.3.26051504",
+  "renpy_build_commit": "7bfab40c1174f622f644b24669afd5fb167fbb79",
+  "renpy_tag": "8.5.3.26051504",
+  "renpy_commit": "39895c1e017f0b36ffea2447d97eccd69d76ee1c",
+  "python": "3.12.8",
+  "host_python": "uv-project",
+  "renpy_sdk": {
+    "url": "https://www.renpy.org/dl/8.5.3/renpy-8.5.3-sdk.tar.bz2",
+    "sha256": "eb0a9be7f0fb13632fe25ceade9a8bed5a1b4d6b6e83bd19eeeb29e1a1bb4a45"
+  },
+  "deps": { "family": "modern", "release": null, "sha256": null },
+  "sdl2": { "release": "sdl2-ios-6-1", "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1" },
+  "patches_sha256": "96379517cc639dd9504e75919624f3bd73cb2ca600c8f67f464941b546a8faf4",
+  "targets": ["ios-arm64", "ios-sim-arm64"],
+  "minimum_ios": "15.6",
+  "xcode": "26.6",
+  "unsupported_python_settings": ["PYTHONMALLOC", "PYTHONDEVMODE", "-X dev"]
+}

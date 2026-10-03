@@ -1,0 +1,15 @@
+# RenPyLinter patch series for this engine branch.
+#
+# Format: <patch file> <where it is applied>
+#   root          applied with `patch -p1` to the renpy-build checkout by
+#                 tools/runtime (renpylinter/tooling) before any task runs
+#   task:<module> applied by tasks/<module>.py to the unpacked source
+#
+# Every file in this directory except this one must be listed.
+
+# Per-session Python heap in librenpython (plan 4.3 step 1 placement).
+librenpython-session-zone.diff root
+
+# libffi 3.4.5 aarch64 CFI order; Apple clang errors with "invalid CFI
+# advance_loc expression". Upstream libffi 8308bed (#857), released in 3.4.7.
+libffi-aarch64-cfi.diff task:libffi
