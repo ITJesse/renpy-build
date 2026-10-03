@@ -1,0 +1,29 @@
+{
+  "engine": "8.4.1",
+  "renpy_build_tag": "renpy-8.4.1.25072401",
+  "renpy_build_commit": "bd462127ad439c2857e59a3e5406ca13b4514f1c",
+  "renpy_tag": "8.4.1.25072401",
+  "renpy_commit": "2b8432fe35b43d446d97aed4b2bc68188623ae1a",
+  "pygame_sdl2_tag": "renpy-8.4.1.25072401",
+  "pygame_sdl2_commit": "1c8de534e0de2b521900e92ed27337c28f9bc5ee",
+  "python": "3.12.8",
+  "host_python": "3.12",
+  "renpy_sdk": {
+    "url": "https://www.renpy.org/dl/8.4.1/renpy-8.4.1-sdk.tar.bz2",
+    "sha256": "7e398814f242b3c4e51b29b9edb7369d1c71434dacdeb2e83445f11addd55076"
+  },
+  "deps": { "family": "modern", "release": null, "sha256": null },
+  "sdl2": { "release": "sdl2-ios-6-1", "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1" },
+  "live2d_header": {
+    "sdk": "CubismSdkForNative-5-r.5",
+    "file": "Core/include/Live2DCubismCore.h",
+    "sha256": "6f1802780d1eb36ff39705e0764f9eeed9b41c313a13ac155270c6f4ad51d53f",
+    "secret": "LIVE2D_CUBISM_CORE_H",
+    "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
+  },
+  "patches_sha256": "78ca17d25f2fb7a58d116cc99577307af9759862e0219c0319183c3bc5461e89",
+  "targets": ["ios-arm64", "ios-sim-arm64"],
+  "minimum_ios": "15.6",
+  "xcode": "26.6",
+  "unsupported_python_settings": ["PYTHONMALLOC", "PYTHONDEVMODE", "-X dev"]
+}

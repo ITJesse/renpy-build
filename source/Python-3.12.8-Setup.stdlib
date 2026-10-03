@@ -100,7 +100,7 @@ _posixsubprocess -DPy_BUILD_CORE_BUILTIN  -DPy_BUILD_CORE_BUILTIN _posixsubproce
 {% endif %}
 
 # Mac, only.
-{% if (c.kind != "host") and (c.platform == "mac") %}
+{% if ((c.kind != "host") and (c.platform == "mac")) or ((c.kind == "host") and ("darwin" in build_platform)) %}
 _scproxy -DPy_BUILD_CORE_BUILTIN _scproxy.c -framework SystemConfiguration -framework CoreFoundation
 {% endif %}
 
