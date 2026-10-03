@@ -73,7 +73,10 @@ def native_environment(c):
     c.env('OBJCFLAGS',flags)
     c.env('OBJCXXFLAGS',flags+' -std=c++17')
     # CPython's OPT defaults to -O3; pin its own variable as well as CFLAGS.
-    c.env('OPT',LOCK['optimization']+' -DNDEBUG')
+    python_opt=LOCK['optimization']+' -DNDEBUG -g -Wall'
+    if LOCK['python'].startswith(('2.7.','3.9.')): python_opt += ' -fwrapv'
+    if LOCK['python'].startswith('2.7.'): python_opt += ' -Wstrict-prototypes'
+    c.env('OPT',python_opt)
     c.env('CPPFLAGS','-I'+str(c.install/'include'))
     c.env('LDFLAGS',('-target '+target+' ' if target else '')+'-isysroot '+sdkroot+' -L'+str(c.install/'lib'))
     c.env('PATH','{{ host }}/bin:{{ PATH }}')
