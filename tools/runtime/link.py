@@ -8,15 +8,26 @@ ROOT=Path(__file__).resolve().parents[2]
 def link(core,dependencies,sdk,minimum,destination,framework_root=None):
     sdkroot=subprocess.check_output(['xcrun','--sdk',sdk,'--show-sdk-path'],text=True).strip()
     target='arm64-apple-ios'+minimum+('-simulator' if sdk=='iphonesimulator' else '')
+    # Modern Apple ld rejects undefined symbols by default; its explicit
+    # -undefined error spelling is deprecated. Verify that default with an
+    # intentionally unresolved symbol, rather than relaxing diagnostics.
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    probe=destination.with_suffix('.undefined-probe.c')
+    probe.write_text('extern int rpl_deliberately_missing_symbol(void);\nint rpl_link_probe(void) { return rpl_deliberately_missing_symbol(); }\n')
+    negative=subprocess.run(['xcrun','--sdk',sdk,'clang','-target',target,'-isysroot',sdkroot,
+                             '-dynamiclib',str(probe),'-o',str(destination.with_suffix('.undefined-probe.dylib'))],capture_output=True,text=True)
+    if negative.returncode==0 or 'rpl_deliberately_missing_symbol' not in negative.stderr:
+        raise RuntimeError('Linker did not prove rejection of undefined symbols: '+negative.stderr)
     libraries=sorted(core.glob('*.a'))
     expected={'librenpy.a','librenpython.a'}
     if not expected<={p.name for p in libraries}: raise ValueError('Missing engine libraries')
     command=['xcrun','--sdk',sdk,'clang++','-target',target,'-isysroot',sdkroot,'-dynamiclib',
-             '-Wl,-undefined,error','-Wl,-fatal_warnings','-o',str(destination)]
+             '-Wl,-fatal_warnings','-o',str(destination)]
     for p in libraries: command+=['-Wl,-force_load,'+str(p)]
     deps=[p for p in sorted(dependencies.glob('*.a')) if p.name not in {x.name for x in libraries} and p.name not in {'libSDL2main.a','libSDL2_test.a'}]
     command+=list(map(str,deps))
-    command+=['-lz','-lbz2','-liconv','-lresolv','-lobjc','-lc++']
+    # zlib/bzip2 are the pinned archives above; clang++ supplies libc++.
+    command+=['-liconv','-lresolv','-lobjc']
     for name in ['Foundation','UIKit','CoreFoundation','CoreGraphics','QuartzCore','OpenGLES','AudioToolbox','CoreAudio','CoreVideo','AVFoundation','GameController','CoreHaptics','CoreMotion','SystemConfiguration','Security','Accelerate']:
         command+=['-framework',name]
     command+=['-F',str(framework_root or dependencies.parent),'-framework','MetalANGLE']
@@ -28,7 +39,7 @@ def link(core,dependencies,sdk,minimum,destination,framework_root=None):
         f.write(result.stdout)
         print(result.stdout,flush=True)
         result.check_returncode()
-    return {'type':'closed-symbol-dylib-link','sdk':sdk,'target':target,'command':command,
+    return {'type':'closed-symbol-dylib-link','undefined_symbol_negative_test':'passed','sdk':sdk,'target':target,'command':command,
             'dependency_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in deps},
             'executable_sha256':hashlib.sha256(destination.read_bytes()).hexdigest(), 'executed':False}
 
