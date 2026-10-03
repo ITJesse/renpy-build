@@ -135,3 +135,47 @@ def session_zone(archive):
                  f"Py_InitializeFromConfig: {calls}")
         report[function] = {"python_main": main, "after": after}
     return report
+
+
+# Values of the Cubism Core declarations renpy.gl2.live2dmodel relies on, as
+# in Cubism SDK 4 (upstream builds with CubismSdkForNative-4-r.6.2 / 4-r.1).
+# Core functions are resolved by name at run time, so these constants and the
+# vector layouts are the whole compile-time ABI surface.
+LIVE2D_ABI = """\
+#include <stddef.h>
+#include "Live2DCubismCore.h"
+#define CHECK(e) _Static_assert(e, #e)
+CHECK(csmAlignofMoc == 64);
+CHECK(csmAlignofModel == 16);
+CHECK(csmBlendAdditive == 1);
+CHECK(csmBlendMultiplicative == 2);
+CHECK(csmIsDoubleSided == 4);
+CHECK(csmIsInvertedMask == 8);
+CHECK(csmIsVisible == 1);
+CHECK(csmVisibilityDidChange == 2);
+CHECK(csmOpacityDidChange == 4);
+CHECK(csmDrawOrderDidChange == 8);
+CHECK(csmRenderOrderDidChange == 16);
+CHECK(csmVertexPositionsDidChange == 32);
+CHECK(csmMocVersion_Unknown == 0);
+CHECK(csmMocVersion_30 == 1);
+CHECK(csmMocVersion_33 == 2);
+CHECK(csmMocVersion_40 == 3);
+CHECK(sizeof(csmFlags) == 1);
+CHECK(sizeof(csmVersion) == 4);
+CHECK(sizeof(csmMocVersion) == 4);
+CHECK(sizeof(csmVector2) == 8 && offsetof(csmVector2, Y) == 4);
+CHECK(sizeof(csmVector4) == 16 && offsetof(csmVector4, W) == 12);
+"""
+
+
+def live2d_abi(header_dir):
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / "probe.c"
+        probe.write_text(LIVE2D_ABI)
+        result = subprocess.run(["xcrun", "--sdk", "iphoneos", "clang", "-target",
+                                 xcode_toolchain.IOS_TARGETS["arm64"][1], "-fsyntax-only",
+                                 "-I", str(header_dir), str(probe)], capture_output=True, text=True)
+        if result.returncode != 0:
+            fail(f"Live2DCubismCore.h ABI differs from what live2dmodel was written against:\n{result.stderr}")
+    return "pass"

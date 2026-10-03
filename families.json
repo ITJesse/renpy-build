@@ -117,6 +117,7 @@
         "cython",
         "hostpython3",
         "python3",
+        "rapt",
         "pyjnius",
         "pyobjus",
         "iossupport",

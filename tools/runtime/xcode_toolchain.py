@@ -47,6 +47,14 @@ def tool(sdk, name):
     return xcrun("--sdk", sdk, "--find", name)
 
 
+HOST_LIBRARIES = ("xz", "openssl@3", "libffi")
+
+
+@lru_cache(maxsize=None)
+def host_library_prefixes():
+    return [subprocess.check_output(["brew", "--prefix", f], text=True).strip() for f in HOST_LIBRARIES]
+
+
 def description():
     """Toolchain identity recorded in build-info.json."""
 
@@ -59,6 +67,8 @@ def description():
         "clang": subprocess.check_output([tool("iphoneos", "clang"), "--version"], text=True).split("\n")[0],
         "sdks": {sdk: xcrun("--sdk", sdk, "--show-sdk-version") for sdk in ("iphoneos", "iphonesimulator", "macosx")},
         "minimum_ios": MINIMUM_IOS,
+        "host_libraries": subprocess.check_output(["brew", "list", "--versions", *HOST_LIBRARIES],
+                                                  text=True).split("\n")[:-1],
     }
 
 
@@ -121,6 +131,17 @@ def apply(c):
     if c.kind in ("host", "host-python", "cross"):
         sdk = "macosx"
         _set_tools(c, sdk, f"-isysroot {shlex.quote(sdk_path(sdk))}")
+        # Upstream's host has libssl-dev, liblzma-dev and libffi-dev; the macOS
+        # SDK lacks them. Only build-machine programs (host Python) see these.
+        pkgconfig = ["{{ install }}/lib/pkgconfig"]
+        for prefix in host_library_prefixes():
+            c.env("CFLAGS", f"{{{{ CFLAGS }}}} -I{prefix}/include")
+            c.env("CPPFLAGS", f"{{{{ CPPFLAGS }}}} -I{prefix}/include")
+            c.env("LDFLAGS", f"{{{{ LDFLAGS }}}} -L{prefix}/lib")
+            pkgconfig.append(f"{prefix}/lib/pkgconfig")
+        # Nothing else from Homebrew (e.g. libb2) may be discovered.
+        c.env("PKG_CONFIG_LIBDIR", ":".join(pkgconfig))
+        c.environ.pop("PKG_CONFIG_PATH", None)
         return
 
     if c.platform != "ios":

@@ -533,6 +533,26 @@ def check_sdk(src, lock, sdk_tar, work):
     return compiled, stale
 
 
+def install_live2d_header(src, lock, header):
+    """Live2DCubismCore.h for renpy.gl2.live2dmodel (compile time only).
+
+    Upstream's live2d task unpacks the Cubism SDK to {{install}}/cubism; its
+    annotator then adds Core/include and sets CUBISM. The header is
+    proprietary: it comes from a repository secret, is checked against the
+    lock and never enters a bundle.
+    """
+
+    pin = lock["live2d_header"]
+    if bundle.sha256(header) != pin["sha256"]:
+        raise SystemExit(f"Live2DCubismCore.h sha256 does not match the lock ({pin['sdk']})")
+    for target in TARGETS:
+        include = install_dir(src, target) / "cubism" / "Core" / "include"
+        include.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(header, include / "Live2DCubismCore.h")
+    return {"sdk": pin["sdk"], "sha256": pin["sha256"],
+            "abi": gates.live2d_abi(install_dir(src, "ios-arm64") / "cubism" / "Core" / "include")}
+
+
 def compile_python(hostpython, items):
     """items: [(source, destination, display path)] compiled to unchecked-hash pyc."""
 
@@ -562,6 +582,8 @@ def engine(args):
     deps_dir, deps_sums, deps_info = unpack_deps(src, lock, args.deps, args.trial)
     sdl2 = unpack_sdl2(args.sdl2, lock, src / "tmp" / "rpl-inputs")
     sdk_compiled, sdk_stale = check_sdk(src, lock, args.sdk, src / "tmp" / "rpl-inputs")
+
+    live2d = install_live2d_header(src, lock, args.live2d_header)
 
     series.apply(src)
     run_tasks(src, lock, version_cfg["python"], version_cfg["engine_modules"])
@@ -641,6 +663,9 @@ def engine(args):
     for rel, path in sdk_compiled.items():
         shutil.copy2(path, out / "renpy" / rel)
 
+    if list(out.rglob("Live2DCubismCore.h")):
+        gates.fail("the proprietary Live2DCubismCore.h must not be bundled")
+
     py_sources = {r for r in tracked if r.endswith(".py")}
     pycs = {str(p.relative_to(out)) for p in (out / "renpy").rglob("*.pyc")}
     if {r[:-3] + ".pyc" for r in py_sources} != pycs:
@@ -678,6 +703,7 @@ def engine(args):
         "compile_flags": {t: compile_flags(src, t, version_cfg) for t in TARGETS},
         "archives": archives_info,
         "renpy_files": {"compiled": len(py_items), "copied": len(copied), "excluded": skipped},
+        "live2d_header": live2d,
         "gates": gate_report,
         "source_date_epoch": commit_time(src),
         "build_seconds": int(time.time() - started),
@@ -720,6 +746,7 @@ def main():
     p.add_argument("--deps", type=Path, required=True)
     p.add_argument("--sdl2", type=Path, required=True)
     p.add_argument("--sdk", type=Path, required=True)
+    p.add_argument("--live2d-header", type=Path, required=True)
     p.set_defaults(func=engine)
 
     for name, p in sub.choices.items():

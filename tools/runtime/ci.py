@@ -140,7 +140,8 @@ def engine_build(args):
                     "--src", str(SRC), "--out", str(out),
                     "--deps", str(INPUTS / "deps" / f"deps-{l['deps']['family']}-ios.tar.gz"),
                     "--sdl2", str(INPUTS / "sdl2" / SDL2_ASSET),
-                    "--sdk", str(INPUTS / "sdk" / Path(l["renpy_sdk"]["url"]).name)], check=True)
+                    "--sdk", str(INPUTS / "sdk" / Path(l["renpy_sdk"]["url"]).name),
+                    "--live2d-header", str(INPUTS / "live2d" / "Live2DCubismCore.h")], check=True)
     pack(out, f"renpy-runtime-{version}-ios.tar.gz")
 
 
