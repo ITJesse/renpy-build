@@ -75,8 +75,7 @@ Reference application dependency checks are recorded separately. None of these
 checks establishes successful game execution or fixes restart lifecycle issues.
 
 The Actions workflow supports branch pushes and manual dispatch on a version
-branch. Publication is deliberately gated during initial validation. Once
-enabled, the release job allocates a new `renpy-runtime-<version>-r<N>` tag,
+branch. After successful verification, the release job allocates a new `renpy-runtime-<version>-r<N>` tag,
 creates it at the exact source commit, and refuses tag collisions. It publishes
 the complete archive, outer SHA-256, build-info.json and the internal manifest.
 Old tags and assets are never replaced.

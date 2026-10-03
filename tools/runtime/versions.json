@@ -33,7 +33,10 @@
       "llvm_major": "13",
       "cython": "0.29.25"
     },
-    "version_metadata_schema": "vc_version_integer"
+    "version_metadata_schema": "vc_version_integer",
+    "native_source_directory": "module",
+    "context_api": "legacy_model",
+    "python_setup_template": "Setup.local"
   },
   "7.8.2": {
     "tag": "7.8.2.24090902",
@@ -71,7 +74,10 @@
       "llvm_major": "15",
       "cython": "0.29.32"
     },
-    "version_metadata_schema": "version_string"
+    "version_metadata_schema": "version_string",
+    "native_source_directory": "module",
+    "context_api": "context_task",
+    "python_setup_template": "Setup.local"
   },
   "8.0.3": {
     "tag": "8.0.3.22090809",
@@ -107,7 +113,10 @@
       "llvm_major": "13",
       "cython": "0.29.25"
     },
-    "version_metadata_schema": "vc_version_integer"
+    "version_metadata_schema": "vc_version_integer",
+    "native_source_directory": "module",
+    "context_api": "legacy_model",
+    "python_setup_template": "Setup.local"
   },
   "8.1.3": {
     "tag": "8.1.3.23091805",
@@ -145,7 +154,10 @@
       "llvm_major": "15",
       "cython": "0.29.32"
     },
-    "version_metadata_schema": "version_string"
+    "version_metadata_schema": "version_string",
+    "native_source_directory": "module",
+    "context_api": "context_task",
+    "python_setup_template": "Setup.local"
   },
   "8.2.3": {
     "tag": "8.2.3.24061702",
@@ -183,7 +195,10 @@
       "llvm_major": "15",
       "cython": "0.29.32"
     },
-    "version_metadata_schema": "version_string"
+    "version_metadata_schema": "version_string",
+    "native_source_directory": "module",
+    "context_api": "context_task",
+    "python_setup_template": "Setup.local"
   },
   "8.3.7": {
     "tag": "8.3.7.25031702",
@@ -221,7 +236,10 @@
       "llvm_major": "15",
       "cython": "0.29.32"
     },
-    "version_metadata_schema": "version_string"
+    "version_metadata_schema": "version_string",
+    "native_source_directory": "module",
+    "context_api": "context_task",
+    "python_setup_template": "Setup.local"
   },
   "8.4.1": {
     "tag": "8.4.1.25072401",
@@ -259,7 +277,10 @@
       "llvm_major": "18",
       "cython": "3.0.12"
     },
-    "version_metadata_schema": "version_string"
+    "version_metadata_schema": "version_string",
+    "native_source_directory": "src",
+    "context_api": "context_task",
+    "python_setup_template": "Setup.stdlib"
   },
   "8.5.3": {
     "tag": "8.5.3.26051504",
@@ -296,6 +317,9 @@
       "llvm_major": "18",
       "cython": "3.1.4"
     },
-    "version_metadata_schema": "version_string"
+    "version_metadata_schema": "version_string",
+    "native_source_directory": "src",
+    "context_api": "context_task",
+    "python_setup_template": "Setup.stdlib"
   }
 }

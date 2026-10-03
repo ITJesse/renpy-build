@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[2]
 
-def link(core,dependencies,sdk,minimum,destination,framework_root=None):
+def link(core,dependencies,sdk,minimum,destination,framework_root=None,dependency_overrides=None):
     sdkroot=subprocess.check_output(['xcrun','--sdk',sdk,'--show-sdk-path'],text=True).strip()
     target='arm64-apple-ios'+minimum+('-simulator' if sdk=='iphonesimulator' else '')
     # Modern Apple ld rejects undefined symbols by default; its explicit
@@ -26,6 +26,10 @@ def link(core,dependencies,sdk,minimum,destination,framework_root=None):
              '-Wl,-fatal_warnings','-o',str(destination)]
     for p in libraries: command+=['-Wl,-force_load,'+str(p)]
     deps=[p for p in sorted(dependencies.glob('*.a')) if not p.name.startswith(('libpython','librenpy')) and p.name not in {'libSDL2main.a','libSDL2_test.a'}]
+    dep_map={p.name:p for p in deps}
+    dep_map.update(dependency_overrides or {})
+    if any(n.startswith(('libpython','librenpy')) for n in dep_map): raise ValueError('Host core archive cannot be used as a dependency')
+    deps=[dep_map[n] for n in sorted(dep_map)]
     command+=list(map(str,deps))
     # zlib/bzip2 are the pinned archives above; clang++ supplies libc++.
     command+=['-liconv','-lresolv','-lobjc']
