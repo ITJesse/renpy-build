@@ -62,3 +62,19 @@ Live2D 8.5.3 uses the newer csmGetRenderOrders ABI, while older engines use the
 legacy csmGetDrawableRenderOrders ABI. The application's documented legacy
 Live2D library lacks arm64 simulator support; do not substitute x86_64 or claim
 that passing a core engine link validates dynamically resolved Cubism symbols.
+
+## Publication contract
+
+Each branch owns a complete copy of its runtime driver and lockfile; shared
+logic is not fetched from a moving branch. The Actions jobs publish only after
+both archive verification and two closed-symbol links succeed. Release jobs
+serialize per branch and choose the next unused `renpy-runtime-VERSION-rN`.
+They target the exact workflow commit, never replace old assets, and publish
+external archive checksums plus the complete internal manifest. Source-date
+and archive metadata are normalized; bit-for-bit reproducibility still needs
+an independent second build comparison before it is claimed.
+
+libffi 3.4.5's assembly backport is from official PR #857, merge commit
+8308bed5b2423878aa20d7884a99cf2e30b8daf7; the exact patch is adapted to the
+locked tarball. It moves function labels before CFI start directives for
+modern Apple assemblers, without upgrading libffi's ABI.

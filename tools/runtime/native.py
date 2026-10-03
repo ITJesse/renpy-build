@@ -11,11 +11,13 @@ import sys
 import urllib.request
 import zipfile
 import tarfile
+import shlex
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 LOCK = json.loads((ROOT / 'tools/runtime/lock.json').read_text())
+COMMANDS=[]
 
 def run(*args, cwd=ROOT, env=None):
     print('+', *map(str, args), flush=True)
@@ -39,6 +41,8 @@ def fetch(url, commit, path):
 
 
 def native_environment(c):
+    for key in ['CPATH','C_INCLUDE_PATH','CPLUS_INCLUDE_PATH','OBJC_INCLUDE_PATH','SDKROOT']:
+        c.environ.pop(key,None)
     host = c.kind in ('host','host-python','cross')
     sdk = 'macosx' if host else ('iphonesimulator' if c.arch == 'sim-arm64' else 'iphoneos')
     sdkroot = output('xcrun','--sdk',sdk,'--show-sdk-path')
@@ -62,7 +66,7 @@ def native_environment(c):
         flags += ' -isysroot '+sdkroot
     for key,tool in [('CC','clang'),('CXX','clang++'),('AR','ar'),('RANLIB','ranlib'),('NM','nm'),('STRIP','strip')]:
         c.env(key,output('xcrun','--sdk',sdk,'--find',tool))
-    c.env('CPP',c.environ['CC']+' -E')
+    c.env('CPP',c.environ['CC']+' -E -isysroot '+sdkroot+(' -target '+target if target else ''))
     c.env('CFLAGS',flags)
     c.env('CXXFLAGS',flags+' -std=c++17')
     c.env('CPPFLAGS','-I'+str(c.install/'include'))
@@ -152,6 +156,8 @@ def package():
             for member in t.getmembers():
                 path=Path(member.name)
                 relative=Path(*path.parts[1:])
+                if member.isfile() and relative.name.upper().startswith(('LICENSE','COPYING')):
+                    (stdlib/(name+'-'+relative.name)).write_bytes(t.extractfile(member).read())
                 if member.isfile() and relative.suffix=='.py' and (str(relative)=='pefile.py' or str(relative).startswith('ordlookup/')):
                     dest=stdlib/relative;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(t.extractfile(member).read())
     for fn in ['__init__.py','dylib_manager.py','objc_py_types.py','protocols.py']:
@@ -183,6 +189,8 @@ def package():
           'platforms':['iphoneos-arm64','iphonesimulator-arm64'],'minimum_ios':LOCK['minimum_ios'],
           'resource_format':'source-only','host_adaptations':'main.py and helper_tool.rpy remain host-owned; see HOST-INTEGRATION.md',
           'validation':{'built':True,'link_checks':link_results,'game_execution':False,'relaunch_fixed':False}}
+    (out/'build-commands.json').write_text(json.dumps(COMMANDS,indent=2)+'\n')
+    info['compiler_commands']='build-commands.json'
     (out/'build-info.json').write_text(json.dumps(info,indent=2)+'\n')
     (out/'SHA256SUMS').write_text(''.join(sha(p)+'  '+str(p.relative_to(out))+'\n' for p in sorted(out.rglob('*')) if p.is_file()))
     run(sys.executable,ROOT/'tools/runtime/verify.py',out)
@@ -227,6 +235,19 @@ def main():
     import tasks
     import tasks.python3
     runner.build_environment=native_environment
+    upstream_run=runner.run
+    def recorded_run(command, context, verbose=False, quiet=False):
+        COMMANDS.append({'task':context.task_name,'cwd':str(context.cwd),'argv':shlex.split(command),
+                         'compiler_environment':{k:context.environ.get(k) for k in ['CC','CXX','CFLAGS','CXXFLAGS','CPPFLAGS','LDFLAGS','AR','RANLIB']}})
+        return upstream_run(command,context,verbose,quiet)
+    runner.run=recorded_run
+    upstream_group_command=runner.RunCommand
+    class RecordedGroupCommand(upstream_group_command):
+        def __init__(self,command,context):
+            COMMANDS.append({'task':context.task_name,'cwd':str(context.cwd),'argv':shlex.split(context.expand(command)),
+                             'compiler_environment':{k:context.environ.get(k) for k in ['CC','CXX','CFLAGS','CXXFLAGS','CPPFLAGS','LDFLAGS','AR','RANLIB']}})
+            super().__init__(command,context)
+    runner.RunCommand=RecordedGroupCommand
     tasks.python3.common_post=python_post
     selected={'metalangle','zlib','bzip2','xz','brotli','openssl','libffi','libpng','libjpeg_turbo','libwebp',
               'libyuv','aom','libavif','hostpython3','python3','pyobjus','sdl2','sdl2_image','ffmpeg',
