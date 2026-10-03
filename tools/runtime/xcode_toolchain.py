@@ -1,0 +1,148 @@
+"""Apple toolchain for renpy-build's iOS and host tasks.
+
+Upstream renpy-build cross-compiles iOS on Linux with clang/lld and SDK
+tarballs. RenPyLinter builds on a macOS runner instead, so after upstream's
+``build_environment`` has filled in its generic variables, this module replaces
+the compiler, archiver and SDK settings with the selected Xcode's.
+
+Only toolchain variables are touched. Task recipes, configure arguments and
+optimisation flags stay exactly as upstream wrote them, apart from the
+deployment target, which RenPyLinter fixes at iOS 15.6.
+"""
+
+import os
+import re
+import shlex
+import subprocess
+from functools import lru_cache
+from pathlib import Path
+
+MINIMUM_IOS = "15.6"
+
+# Upstream tasks copy the build machine's /usr/share/misc/config.sub (Ubuntu
+# autotools-dev 20220109.1). That exact file is vendored here; engine branches
+# refer to it as {{ config_sub }}.
+CONFIG_SUB = Path(__file__).resolve().parent / "config.sub"
+
+
+# renpy-build arch name -> (Xcode SDK, clang target triple)
+IOS_TARGETS = {
+    "arm64": ("iphoneos", f"arm64-apple-ios{MINIMUM_IOS}"),
+    "sim-arm64": ("iphonesimulator", f"arm64-apple-ios{MINIMUM_IOS}-simulator"),
+}
+
+_VERSION_MIN = re.compile(r"\s-m(?:iphoneos|ios-simulator|ios|macos|macosx)-version-min=\S+")
+
+
+@lru_cache(maxsize=None)
+def xcrun(*args):
+    return subprocess.check_output(["xcrun", *args], text=True).strip()
+
+
+def sdk_path(sdk):
+    return xcrun("--sdk", sdk, "--show-sdk-path")
+
+
+def tool(sdk, name):
+    return xcrun("--sdk", sdk, "--find", name)
+
+
+def description():
+    """Toolchain identity recorded in build-info.json."""
+
+    version = subprocess.check_output(["xcodebuild", "-version"], text=True).split("\n")
+    return {
+        "xcode": version[0].replace("Xcode ", "").strip(),
+        "xcode_build": version[1].replace("Build version ", "").strip(),
+        "developer_dir": subprocess.check_output(["xcode-select", "-p"], text=True).strip()
+        if not os.environ.get("DEVELOPER_DIR") else os.environ["DEVELOPER_DIR"],
+        "clang": subprocess.check_output([tool("iphoneos", "clang"), "--version"], text=True).split("\n")[0],
+        "sdks": {sdk: xcrun("--sdk", sdk, "--show-sdk-version") for sdk in ("iphoneos", "iphonesimulator", "macosx")},
+        "minimum_ios": MINIMUM_IOS,
+    }
+
+
+def _strip_version_min(c, name):
+    if name in c.environ:
+        c.environ[name] = _VERSION_MIN.sub("", " " + c.environ[name]).strip()
+
+
+def _set_tools(c, sdk, target_args):
+    """Mirror upstream's llvm(): ccache-wrapped clang linking with lld.
+
+    The flag order matters: upstream's tools/cmake_build_variables.cmake strips
+    the literal "ccache " prefix and "-fuse-ld=lld -Wno-unused-command-line-argument ".
+    Only the compiler binaries (Xcode's clang) and the SDK differ from upstream.
+    """
+
+    clang = shlex.quote(tool(sdk, "clang"))
+    clangxx = shlex.quote(tool(sdk, "clang++"))
+    clang_args = "-fuse-ld=lld -Wno-unused-command-line-argument " + target_args
+    cxx_args = "-stdlib=libc++" if c.kind not in ("host", "host-python", "cross") else ""
+
+    c.var("clang_args", clang_args)
+    c.var("cxx_clang_args", cxx_args)
+    c.env("CC", f"ccache {clang} {clang_args} -std=gnu17")
+    c.env("CXX", f"ccache {clangxx} {clang_args} -std=gnu++17 {cxx_args}".rstrip())
+    c.env("CPP", f"ccache {clang} {clang_args} -E")
+    c.env("AR", tool(sdk, "ar"))
+    c.env("RANLIB", tool(sdk, "ranlib"))
+    c.env("STRIP", tool(sdk, "strip"))
+    c.env("NM", tool(sdk, "nm"))
+    c.var("lipo", tool(sdk, "lipo"))
+
+    for name in ("READELF", "WINDRES", "RC", "LD"):
+        c.environ.pop(name, None)
+
+
+def _add_cmake_args(c, extra):
+    """Append to the variable holding upstream's CMake arguments.
+
+    8.4+ keep them in ``cmake_args``; 7.8 and 8.1-8.3 expand them into
+    ``cmake``. Either way it is the variable naming the project include.
+    """
+
+    for name, value in list(c.variables.items()):
+        if "-DCMAKE_PROJECT_INCLUDE_BEFORE=" in value:
+            c.var(name, value + extra, expand=False)
+
+
+def apply(c):
+    """Rewrite the toolchain part of a renpy-build Context in place."""
+
+    c.var("config_sub", str(CONFIG_SUB))
+
+    # Deterministic archive members (no timestamps/uid in ar headers).
+    c.env("ZERO_AR_DATE", "1")
+
+    for name in ("SDKROOT", "MACOSX_DEPLOYMENT_TARGET", "IPHONEOS_DEPLOYMENT_TARGET"):
+        c.environ.pop(name, None)
+
+    if c.kind in ("host", "host-python", "cross"):
+        sdk = "macosx"
+        _set_tools(c, sdk, f"-isysroot {shlex.quote(sdk_path(sdk))}")
+        return
+
+    if c.platform != "ios":
+        raise SystemExit(f"Only iOS targets are supported by this driver, not {c.platform}.")
+
+    sdk, triple = IOS_TARGETS[c.arch]
+    sysroot = sdk_path(sdk)
+
+    _set_tools(c, sdk, f"-target {triple} -isysroot {shlex.quote(sysroot)}")
+
+    # The -target triple carries the deployment target; drop upstream's 13.0 flags.
+    for name in ("CFLAGS", "CXXFLAGS", "LDFLAGS", "CPPFLAGS"):
+        _strip_version_min(c, name)
+
+    c.env("IPHONEOS_DEPLOYMENT_TARGET", MINIMUM_IOS)
+
+    # Only the target install tree may provide .pc files.
+    c.env("PKG_CONFIG_LIBDIR", "{{ install }}/lib/pkgconfig")
+    c.environ.pop("PKG_CONFIG_PATH", None)
+
+    # Upstream points CMake at {{cross}}/sdk, which run_tasks links to Xcode's
+    # SDK; CMake on a macOS host additionally needs the Apple variables.
+    _add_cmake_args(c, f" -DCMAKE_OSX_SYSROOT={shlex.quote(sysroot)}"
+                   " -DCMAKE_OSX_ARCHITECTURES=arm64"
+                   f" -DCMAKE_OSX_DEPLOYMENT_TARGET={MINIMUM_IOS}")

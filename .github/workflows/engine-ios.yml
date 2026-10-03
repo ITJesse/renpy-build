@@ -1,0 +1,125 @@
+name: Build iOS engine runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Ren'Py engine version (families.json "versions")
+        required: true
+        type: choice
+        options: ['8.5.3', '8.4.1', '8.3.7', '8.2.3', '8.1.3', '8.0.3', '7.8.2', '7.5.3']
+      publish:
+        description: Publish a renpy-<version>-r<N> release when every gate passes
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 3G
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ENGINE_VERSION: ${{ inputs.version }}
+    outputs:
+      bundle: ${{ steps.config.outputs.bundle }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: config
+        run: python3 tools/runtime/ci.py engine-config >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.config.outputs.branch }}
+          path: src
+          fetch-depth: 0
+
+      - name: Fetch the upstream tag the branch is based on
+        working-directory: src
+        run: |
+          tag=$(python3 -c 'import json; print(json.load(open("renpylinter.lock.json"))["renpy_build_tag"])')
+          git fetch --no-tags https://github.com/renpy/renpy-build.git "refs/tags/$tag:refs/tags/$tag"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install build tools
+        run: brew install autoconf automake libtool pkg-config ccache lld
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-engine-${{ inputs.version }}-xcode26.6-${{ github.run_id }}
+          restore-keys: ccache-engine-${{ inputs.version }}-xcode26.6-
+
+      - name: Fetch inputs (deps release, SDL2 release, Ren'Py SDK)
+        run: python3 tools/runtime/ci.py engine-inputs
+
+      - name: Prepare build environment
+        run: python3 tools/runtime/driver.py prepare --src src
+
+      - name: Build and gate
+        run: |
+          set -o pipefail
+          python3 -u tools/runtime/ci.py engine-build 2>&1 | tee build.log
+
+      - name: Retain logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-logs-${{ inputs.version }}-${{ github.run_id }}
+          path: |
+            build.log
+            src/tmp/rpl-logs/
+            src/tmp/build/**/config.log
+          if-no-files-found: ignore
+
+      - name: Retain bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.config.outputs.bundle }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: inputs.publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    concurrency:
+      group: engine-release-${{ inputs.version }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/runtime
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.bundle }}
+          path: dist
+      - name: Verify bundle and choose revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ENGINE_VERSION: ${{ inputs.version }}
+        run: python3 tools/runtime/ci.py release-prepare --kind engine --name "$ENGINE_VERSION"
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.tar.gz
+      - name: Publish immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 tools/runtime/ci.py release-publish

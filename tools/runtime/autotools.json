@@ -1,0 +1,15 @@
+{
+  "comment": "GNU build tools at the versions of upstream's Ubuntu 24.04 build host. Tasks run autoreconf/autogen, so these versions shape the generated configure scripts (CPython 3.12 requires autoconf 2.71). Built from source into tmp/rpl-tools in this order. GNU libtool is installed as glibtool/glibtoolize so Apple's libtool stays available.",
+  "packages": [
+    {"name": "m4", "url": "https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz",
+     "sha256": "63aede5c6d33b6d9b13511cd0be2cac046f2e70fd0a07aa9573a04a82783af96", "configure": []},
+    {"name": "autoconf", "url": "https://ftp.gnu.org/gnu/autoconf/autoconf-2.71.tar.xz",
+     "sha256": "f14c83cfebcc9427f2c3cea7258bd90df972d92eb26752da4ddad81c87a0faa4", "configure": []},
+    {"name": "automake", "url": "https://ftp.gnu.org/gnu/automake/automake-1.16.5.tar.xz",
+     "sha256": "f01d58cd6d9d77fbdca9eb4bbd5ead1988228fdb73d6f7a201f5f8d6b118b469", "configure": []},
+    {"name": "libtool", "url": "https://ftp.gnu.org/gnu/libtool/libtool-2.4.7.tar.xz",
+     "sha256": "4f7f217f057ce655ff22559ad221a0fd8ef84ad1fc5fcb6990cecc333aa1635d", "configure": ["--program-prefix=g"]},
+    {"name": "autoconf-archive", "url": "https://ftp.gnu.org/gnu/autoconf-archive/autoconf-archive-2022.09.03.tar.xz",
+     "sha256": "e07454f00d8cae7907bed42d0747798927809947684d94c37207a4d63a32f423", "configure": []}
+  ]
+}

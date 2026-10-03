@@ -1,0 +1,4 @@
+# Upstream builds on Ubuntu 24.04 (CMake 3.28.3). tools/cmake_build_variables.cmake
+# changes compiler flags for CMake > 3.29, so newer CMake does not reproduce upstream.
+cmake==3.28.3
+ninja==1.11.1.4
