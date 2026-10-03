@@ -98,6 +98,13 @@ jobs:
               +'Host main.py/helper_tool.rpy adaptations remain host-owned; read HOST-INTEGRATION.md before integrating.\n\n'
               +'Workflow: '+os.environ['WORKFLOW_URL']+'\n')
           PY
+      - name: Publish immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
           tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -cf - -C bundle . | gzip -n > "$ARCHIVE"
           sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
           gh api --method POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$RELEASE_TAG" -f sha="$SOURCE_COMMIT"
