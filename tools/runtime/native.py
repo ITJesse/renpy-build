@@ -12,6 +12,7 @@ import urllib.request
 import zipfile
 import tarfile
 import shlex
+import threading
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -75,7 +76,11 @@ def native_environment(c):
     c.env('PKG_CONFIG','pkg-config --static')
     c.env('PKG_CONFIG_PATH',str(c.install/'lib/pkgconfig'))
     c.env('PKG_CONFIG_LIBDIR',str(c.install/'lib/pkgconfig'))
-    c.env('IPHONEOS_DEPLOYMENT_TARGET',LOCK['minimum_ios'])
+    if host:
+        c.environ.pop('IPHONEOS_DEPLOYMENT_TARGET',None)
+    else:
+        c.environ.pop('MACOSX_DEPLOYMENT_TARGET',None)
+        c.env('IPHONEOS_DEPLOYMENT_TARGET',LOCK['minimum_ios'])
     cmake = '-G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX='+str(c.install)
     if not host:
         cmake += (' -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT='+sdkroot+
@@ -249,7 +254,11 @@ def main():
         return upstream_run(command,context,verbose,quiet)
     runner.run=recorded_run
     upstream_group_command=runner.RunCommand
+    compiler_slots=threading.Semaphore(min(os.cpu_count() or 2,3))
     class RecordedGroupCommand(upstream_group_command):
+        def run(self):
+            with compiler_slots:
+                super().run()
         def __init__(self,command,context):
             COMMANDS.append({'task':context.task_name,'cwd':str(context.cwd),'argv':shlex.split(context.expand(command)),
                              'compiler_environment':{k:context.environ.get(k) for k in ['CC','CXX','CFLAGS','CXXFLAGS','CPPFLAGS','LDFLAGS','AR','RANLIB']}})
