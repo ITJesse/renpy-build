@@ -23,7 +23,7 @@ def build(c: Context):
     c.var("version", version)
     c.chdir("harfbuzz-{{version}}")
 
-    c.run("""cp /usr/share/misc/config.sub .""")
+    c.run("""cp {{ root }}/tools/runtime/config.sub .""")
 
     c.run("""{{configure}} {{ cross_config }}
           --disable-shared

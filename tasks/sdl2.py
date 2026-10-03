@@ -45,6 +45,8 @@ def build(c: Context):
         --prefix="{{ install }}"
 
         --disable-render-metal
+        --disable-video-metal
+        --disable-video-vulkan
         --disable-jack
         --disable-pipewire
 
@@ -97,8 +99,9 @@ def build(c: Context):
 
 """)
 
-    c.run("""{{ make }}""")
-    c.run("""make install""")
+    c.run("""{{ make }} build/libSDL2.la""")
+    c.run("""make install-hdrs install-data install-bin""")
+    c.copy("build/.libs/libSDL2.a", "{{install}}/lib/libSDL2.a")
 
 
 @task(kind="arch-python", platforms="android", archs="x86_64", always=True)
