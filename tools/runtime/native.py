@@ -76,11 +76,15 @@ def native_environment(c):
     c.env('PKG_CONFIG','pkg-config --static')
     c.env('PKG_CONFIG_PATH',str(c.install/'lib/pkgconfig'))
     c.env('PKG_CONFIG_LIBDIR',str(c.install/'lib/pkgconfig'))
-    if host:
-        c.environ.pop('IPHONEOS_DEPLOYMENT_TARGET',None)
-    else:
-        c.environ.pop('MACOSX_DEPLOYMENT_TARGET',None)
-        c.env('IPHONEOS_DEPLOYMENT_TARGET',LOCK['minimum_ios'])
+    # Target deployment is already explicit in -target and CMake. An ambient
+    # IPHONEOS_DEPLOYMENT_TARGET also retargets nested host tools such as
+    # FreeType's apinames, even when they invoke the native compiler.
+    c.environ.pop('IPHONEOS_DEPLOYMENT_TARGET',None)
+    c.environ.pop('MACOSX_DEPLOYMENT_TARGET',None)
+    build_sdk=output('xcrun','--sdk','macosx','--show-sdk-path')
+    build_cc=output('xcrun','--sdk','macosx','--find','clang')
+    for key in ['CC_BUILD','CC_FOR_BUILD','BUILD_CC']:
+        c.env(key,build_cc+' -target arm64-apple-macos11.0 -isysroot '+build_sdk)
     cmake = '-G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX='+str(c.install)
     if not host:
         cmake += (' -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT='+sdkroot+
@@ -100,8 +104,8 @@ def host_python(c):
     wheelhouse=ROOT/'tmp/tars/python-build-tools'
     wheelhouse.mkdir(parents=True,exist_ok=True)
     run(sys.executable,'-m','pip','download','--only-binary=:all:','--no-deps','--dest',wheelhouse,
-        'Cython=='+LOCK['cython'],'setuptools==80.9.0')
-    c.run('{{ host }}/bin/python3 -m pip install --no-index --find-links='+str(wheelhouse)+' Cython=='+LOCK['cython']+' setuptools==80.9.0')
+        '--require-hashes','-r',ROOT/'tools/runtime/build-tool-requirements.txt')
+    c.run('{{ host }}/bin/python3 -m pip install --no-index --find-links='+str(wheelhouse)+' --require-hashes -r '+str(ROOT/'tools/runtime/build-tool-requirements.txt'))
 
 
 def python_post(c):
@@ -195,12 +199,15 @@ def package():
     shutil.copy2(ROOT/'tools/runtime/host-reference.json',out/'host-reference.json')
     info={'schema_version':1,'engine_version':LOCK['engine'],'python_version':LOCK['python'],
           'source_commit':output('git','-C',ROOT,'rev-parse','HEAD'),'source_lock':LOCK,'resource_requirements_sha256':sha(ROOT/'tools/runtime/resources-requirements.txt'),
+          'build_tool_requirements_sha256':sha(ROOT/'tools/runtime/build-tool-requirements.txt'),
           'patches':{str(p.relative_to(ROOT)):sha(p) for p in [ROOT/'runtime/librenpython3.c',*sorted((ROOT/'tools/runtime').glob('*.py'))]},
           'toolchain':{'xcode':output('xcodebuild','-version'),'clang':output('xcrun','clang','--version'),
                        'autoconf':output('autoconf','--version').splitlines()[0], 'cmake':output('cmake','--version').splitlines()[0]},
           'platforms':['iphoneos-arm64','iphonesimulator-arm64'],'minimum_ios':LOCK['minimum_ios'],
           'resource_format':'source-only','host_adaptations':'main.py and helper_tool.rpy remain host-owned; see HOST-INTEGRATION.md',
           'validation':{'built':True,'link_checks':link_results,'game_execution':False,'relaunch_fixed':False}}
+    import re
+    info['dynamic_dependencies']={'Live2D':{'required_symbols':sorted(set(re.findall(r'load_live2d_function\(object, "([^"]+)"\)',(ROOT/'renpy/renpy/gl2/live2dcsm.pxi').read_text()))),'binding':'runtime-dlsym','provided_by':'host application'}}
     (out/'build-commands.json').write_text(json.dumps(COMMANDS,indent=2)+'\n')
     info['compiler_commands']='build-commands.json'
     (out/'build-info.json').write_text(json.dumps(info,indent=2)+'\n')

@@ -38,5 +38,62 @@
   "launcher_patch_reference": {
     "path": "docs/librenpython-edits-summary.md",
     "sha256": "3cc937694ffcdfeaa2f31cd1d5148f4df6fb6080b33c5bd68d04b61f7f601c9d"
+  },
+  "live2d": {
+    "Live2D853/iphoneos": {
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "544ef4945c19d43919b861567328da6bfd95b99c2474114db403d24ed8292fcc",
+      "missing_853_symbols": [],
+      "minimum_os": [
+        "26.2"
+      ]
+    },
+    "Live2D853/iphonesimulator": {
+      "architectures": [
+        "x86_64",
+        "arm64"
+      ],
+      "sha256": "b4b82b2909500ec13038fb24e806ef92230e19fbf0cb05e4b2ad41d872be42ff",
+      "missing_853_symbols": [],
+      "minimum_os": [
+        "26.2"
+      ]
+    },
+    "Live2DLegacy/iphoneos": {
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "31af46a7ff4f3bfe3047903e3e9bf5620d34b4fe49372d72e06d4fdc048dc39f",
+      "minimum_os": [
+        "16.2"
+      ]
+    },
+    "Live2DLegacy/iphonesimulator": {
+      "architectures": [
+        "x86_64"
+      ],
+      "sha256": "36e68e1e179e058377c4b9805c72a6cd82455b2683cd0ace917fcede16c0c189"
+    }
+  },
+  "verified_dependencies_853": {
+    "openssl": {
+      "version": "3.3.2",
+      "evidence": "OpenSSL 3.3.2 3 Sep 2024 string in Lib853/release/libcrypto.a"
+    },
+    "assimp": {
+      "version": "5.4.3",
+      "revision_prefix": "c35200e3",
+      "evidence": "ARM64 return constants from aiGetVersionMajor/Minor/Patch/Revision; static inspection, not execution"
+    },
+    "sdl": {
+      "version": "2.0.20",
+      "evidence": "SDL_GetVersion ARM64 stores 16-bit 0x0002 followed by byte 0x14; static inspection, not execution"
+    },
+    "ffmpeg": {
+      "version": "4.3.1",
+      "evidence": "Exact version string in Lib853/release/libavutil.a"
+    }
   }
 }

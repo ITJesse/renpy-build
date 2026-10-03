@@ -34,6 +34,8 @@ def verify(root):
             symbols=command('xcrun','nm','-gU',str(lib))
             if not re.search(r'\b'+re.escape(symbol)+r'$',symbols,re.M): raise ValueError('Missing '+symbol)
         if info['python_version'].startswith('3'):
+            launcher_symbols=command('xcrun','nm','-gU',str(root/'platforms'/platform/'librenpython.a'))
+            if not re.search(r'\b_launcher_main_wide$',launcher_symbols,re.M): raise ValueError('Missing wide launcher entry point')
             if b'RenPyPythonSession' not in (root/'platforms'/platform/'librenpython.a').read_bytes(): raise ValueError('Missing allocator patch')
         if not (root/'platforms'/platform/'include'/py/'pyconfig.h').is_file(): raise ValueError('Missing target pyconfig.h')
     for name in ['main.py','renpy/__init__.py','renpy/common/00start.rpy','lib/'+py+'/encodings/__init__.py','lib/'+py+'/site.py','lib/'+py+'/pyobjus/__init__.py','lib/'+py+'/certifi/cacert.pem']:
