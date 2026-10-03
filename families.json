@@ -35,7 +35,7 @@
         "renpy_build_tag": "renpy-8.5.3.26051504",
         "renpy_build_commit": "7bfab40c1174f622f644b24669afd5fb167fbb79"
       },
-      "recipe_sha256": "cd26400dcdbb90c03d68315ce979687b00ac343e67eccd516d2262532a95911c",
+      "recipe_sha256": "81a45cfc7f4b65b3af8ea94076b06b51ec06bd5a0a50134eeca7745d928d39c0",
       "members": [
         "8.4.1",
         "8.5.3"

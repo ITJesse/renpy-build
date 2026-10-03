@@ -135,7 +135,10 @@ def apply(c):
     for name in ("CFLAGS", "CXXFLAGS", "LDFLAGS", "CPPFLAGS"):
         _strip_version_min(c, name)
 
-    c.env("IPHONEOS_DEPLOYMENT_TARGET", MINIMUM_IOS)
+    # Upstream exports IPHONEOS_DEPLOYMENT_TARGET, which Linux compilers ignore.
+    # Apple's /usr/bin/cc would apply it to build-machine helpers (freetype's
+    # apinames) and produce iOS binaries; the -target triple already carries it.
+    c.environ.pop("IPHONEOS_DEPLOYMENT_TARGET", None)
 
     # Only the target install tree may provide .pc files.
     c.env("PKG_CONFIG_LIBDIR", "{{ install }}/lib/pkgconfig")

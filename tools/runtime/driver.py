@@ -49,6 +49,9 @@ SDL2_ARCHIVE = {"ios-arm64": "release/libSDL2.a", "ios-sim-arm64": "debug/libSDL
 # the MetalANGLE framework (global layer) and the SDK link.
 UNPACKAGED_MODULES = {"nasm", "metalangle"}
 
+# Modules built purely from renpy-build's own files.
+FIRST_PARTY = {"toolchain": "source/mockrt.c"}
+
 LICENSE_NAME = re.compile(r"^(COPYING|LICEN[CS]E|NOTICE|COPYRIGHT)([._-].*)?$", re.I)
 
 # System frameworks and libraries an iOS app links for the Ren'Py runtime.
@@ -144,9 +147,10 @@ def prepare(args):
 def build_autotools(prefix):
     """GNU autotools pinned in autotools.json, built from verified sources."""
 
-    pins = json.loads((HERE / "autotools.json").read_text())["packages"]
+    config = json.loads((HERE / "autotools.json").read_text())
+    pins = config["packages"]
     stamp = prefix / "autotools.json"
-    if stamp.exists() and json.loads(stamp.read_text()) == pins:
+    if stamp.exists() and json.loads(stamp.read_text()) == config:
         return
     work = prefix / "src"
     shutil.rmtree(work, ignore_errors=True)
@@ -160,13 +164,18 @@ def build_autotools(prefix):
         if bundle.sha256(archive) != pin["sha256"]:
             raise SystemExit(f"{archive.name}: sha256 mismatch")
         run(["tar", "xf", archive, "-C", work])
-        source = work / archive.name.removesuffix(".tar.xz")
+        source = work / re.sub(r"\.tar\.(xz|gz)$", "", archive.name)
         run(["./configure", f"--prefix={prefix}", *pin["configure"]], cwd=source, env=env,
             stdout=subprocess.DEVNULL)
         run(["make", f"-j{os.cpu_count() or 2}"], cwd=source, env=env, stdout=subprocess.DEVNULL)
         run(["make", "install"], cwd=source, env=env, stdout=subprocess.DEVNULL)
     shutil.rmtree(work)
-    stamp.write_text(json.dumps(pins))
+    for name, digest in config["aclocal"]["files"].items():
+        source = HERE / "aclocal" / name
+        if bundle.sha256(source) != digest:
+            raise SystemExit(f"aclocal/{name}: sha256 mismatch")
+        shutil.copy2(source, prefix / "share" / "aclocal" / name)
+    stamp.write_text(json.dumps(config))
 
 
 # Host settings that would leak host headers, libraries or .pc files into
@@ -176,9 +185,12 @@ HOST_LEAKS = ("PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", 
               "LDFLAGS", "SDKROOT", "ACLOCAL_PATH", "MACOSX_DEPLOYMENT_TARGET", "IPHONEOS_DEPLOYMENT_TARGET")
 
 
-def task_env(src):
+def task_env(src, lock):
     env = {k: v for k, v in os.environ.items() if k not in HOST_LEAKS}
-    env["PATH"] = f"{tool_path(src)}:{env['PATH']}"
+    # Like `uv run` / an activated venv: the build environment's scripts
+    # (cython, ...) come first, then the pinned build tools.
+    env["PATH"] = f"{build_python(src, lock).parent}:{tool_path(src)}:{env['PATH']}"
+    env["VIRTUAL_ENV"] = str(build_python(src, lock).parent.parent)
     env["LIBTOOLIZE"] = "glibtoolize"
     env.setdefault("CCACHE_COMPILERCHECK", "content")
     env.setdefault("PYTHONHASHSEED", "0")
@@ -187,7 +199,7 @@ def task_env(src):
 
 def run_tasks(src, lock, python_major, modules):
     run([build_python(src, lock), "-u", HERE / "run_tasks.py", "--root", src, "--python", python_major,
-         "--archs", ",".join(ARCH[t] for t in TARGETS), *modules], env=task_env(src))
+         "--archs", ",".join(ARCH[t] for t in TARGETS), *modules], env=task_env(src, lock))
 
 
 def install_dir(src, target):
@@ -236,6 +248,16 @@ def collect_licenses(src, modules, dest):
 
     found = {}
     for module in modules:
+        if module in FIRST_PARTY:
+            # renpy-build's own code; the repository has no separate license file.
+            source = src / FIRST_PARTY[module]
+            (dest / module).mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dest / module / source.name)
+            (dest / module / "NOTICE.txt").write_text(
+                f"Built from renpy-build {FIRST_PARTY[module]} (included here); "
+                "https://github.com/renpy/renpy-build has no separate license file.\n")
+            found[module] = sorted(str(p.relative_to(dest)) for p in (dest / module).iterdir())
+            continue
         roots = [src / "tmp" / "build" / f"{module}.ios-arm64", src / "tmp" / "source" / module]
         hits = []
         for root in roots:
@@ -403,7 +425,7 @@ def deps(args):
         "toolchain": toolchain,
         "build_tools": {"pip": [l for l in (HERE / "build-tools.txt").read_text().split("\n")
                                 if l and not l.startswith("#")],
-                        "autotools": json.loads((HERE / "autotools.json").read_text())["packages"]},
+                        "autotools": json.loads((HERE / "autotools.json").read_text())},
         "sdl2_build_tree": sdl2_tree_info(src),
         "sdl2_link_check": {"release": lock["sdl2"]["release"], "sha256": lock["sdl2"]["sha256"]},
         "metalangle": {p.name: bundle.sha256(p) for p in sorted((src / "source").glob("MetalANGLE*"))},
@@ -435,8 +457,11 @@ def finish(out, info, trial):
 
 # engine #######################################################################
 
-def unpack_deps(src, lock, tar_path):
-    verify_tarball(tar_path, lock["deps"]["sha256"], "deps release")
+def unpack_deps(src, lock, tar_path, trial=False):
+    if trial and lock["deps"]["sha256"] != bundle.sha256(tar_path):
+        log("WARNING: deps tarball is not the locked release (trial build)")
+    else:
+        verify_tarball(tar_path, lock["deps"]["sha256"], "deps release")
     dest = src / "tmp" / "rpl-inputs" / "deps"
     shutil.rmtree(dest, ignore_errors=True)
     bundle.extract(tar_path, dest)
@@ -534,7 +559,7 @@ def engine(args):
     if lock["deps"]["family"] != version_cfg["family"]:
         raise SystemExit("lock and families.json disagree on the family")
 
-    deps_dir, deps_sums, deps_info = unpack_deps(src, lock, args.deps)
+    deps_dir, deps_sums, deps_info = unpack_deps(src, lock, args.deps, args.trial)
     sdl2 = unpack_sdl2(args.sdl2, lock, src / "tmp" / "rpl-inputs")
     sdk_compiled, sdk_stale = check_sdk(src, lock, args.sdk, src / "tmp" / "rpl-inputs")
 

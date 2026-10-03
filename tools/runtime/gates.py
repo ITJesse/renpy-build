@@ -42,15 +42,17 @@ def archive_platforms(target, archives):
     return report
 
 
+# On iOS, renpy-build's libSDL2main.a only holds SDL_dummy_main.o; the host
+# application provides main(), so the shell does too.
 STUB = """\
-/* RenPyLinter link gate: SDL2main provides main() and calls SDL_main. */
+/* RenPyLinter link gate: the host application calls the engine entry point. */
 extern int %(entry)s(int argc, char **argv);
-int SDL_main(int argc, char **argv) { return %(entry)s(argc, argv); }
+int main(int argc, char **argv) { return %(entry)s(argc, argv); }
 """
 
 STUB_NO_ENTRY = """\
 /* RenPyLinter link gate for a dependency layer without an engine. */
-int SDL_main(int argc, char **argv) { (void) argc; (void) argv; return 0; }
+int main(int argc, char **argv) { (void) argc; (void) argv; return 0; }
 """
 
 
