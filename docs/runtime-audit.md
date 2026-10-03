@@ -1,6 +1,6 @@
 # RenPyLinter iOS engine source audit
 
-Status: 8.5.3 native macOS build implementation under validation; no engine release yet.
+This document records source evidence and the build contract. Completion is established by workflow results and downloaded-artifact verification, not by this document.
 
 ## Baselines
 
@@ -93,3 +93,20 @@ modern Apple assemblers, without upgrading libffi's ABI.
 
 Read all differences above as explicit porting work that requires successful
 CI and link verification, not as equivalence established by documentation.
+
+## Reference host dependency observations
+
+The current reference application archives were inspected without modifying them.
+`tools/runtime/host-reference.json` records their hashes and the evidence method.
+For 8.5.3, SDL is 2.0.20, FFmpeg reports 4.3.1, OpenSSL reports 3.3.2, and
+Assimp's ARM64 getters encode 5.4.3 with revision prefix c35200e3, matching the
+locked source commit. These are static observations, not executed tests.
+
+Live2D853 has arm64 device/simulator slices and exports all symbols requested by
+the pinned 8.5.3 live2dcsm.pxi, but both slices declare minimum OS 26.2. The
+legacy device Core declares 16.2; its simulator archive contains only x86_64.
+Those existing host dependency restrictions are not fixed by a 15.6 core build.
+The engine bundle does not distribute or replace those Core archives.
+
+The 7.5.3/8.0.3 source pair reads an integer vc_version; later versions read a
+version string. Packaging supplies both forms from the verified release tag.

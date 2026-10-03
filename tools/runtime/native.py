@@ -154,7 +154,7 @@ def package():
     resources.mkdir()
     shutil.copytree(ROOT/'renpy/renpy',resources/'renpy',ignore=shutil.ignore_patterns('*.pyc','*.rpyc','*.pyx','*.pxd','__pycache__'))
     shutil.copy2(ROOT/'renpy/renpy.py',resources/'main.py')
-    (resources/'renpy/vc_version.py').write_text("version = %r\nversion_name = 'RenPyLinter reproducible runtime'\nofficial = False\nnightly = False\nbranch = 'fix'\n" % LOCK['tag'])
+    (resources/'renpy/vc_version.py').write_text("version = %r\nvc_version = %d\nversion_name = 'RenPyLinter reproducible runtime'\nofficial = False\nnightly = False\nbranch = 'fix'\n" % (LOCK['tag'],int(LOCK['tag'].split('.')[-1])))
     stdlib=resources/'lib'/py
     shutil.copytree(ROOT/'tmp/build/python3.ios-arm64-py3'/('Python-'+LOCK['python'])/'Lib',stdlib,
                     ignore=shutil.ignore_patterns('test','tests','idlelib','tkinter','ensurepip','__pycache__','*.pyc'))
