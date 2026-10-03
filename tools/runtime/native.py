@@ -8,6 +8,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import urllib.request
+import zipfile
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -72,7 +74,7 @@ def native_environment(c):
     cmake = '-G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX='+str(c.install)
     if not host:
         cmake += (' -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT='+sdkroot+
-                  ' -DCMAKE_OSX_DEPLOYMENT_TARGET='+LOCK['minimum_ios']+' -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY'+
+                  ' -DCMAKE_OSX_DEPLOYMENT_TARGET='+LOCK['minimum_ios']+' -DCMAKE_MACOSX_BUNDLE=OFF'+
                   ' -DCMAKE_FIND_ROOT_PATH='+str(c.install)+' -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER')
     c.var('cmake_args',cmake)
     c.env('CMAKE_BUILD_PARALLEL_LEVEL',str(min(os.cpu_count() or 2,8)))
@@ -127,6 +129,7 @@ def package():
     resources.mkdir()
     shutil.copytree(ROOT/'renpy/renpy',resources/'renpy',ignore=shutil.ignore_patterns('*.pyc','*.rpyc','*.pyx','*.pxd','__pycache__'))
     shutil.copy2(ROOT/'renpy/renpy.py',resources/'main.py')
+    (resources/'renpy/vc_version.py').write_text("version = %r\nversion_name = 'RenPyLinter reproducible runtime'\nofficial = False\nnightly = False\nbranch = 'fix'\n" % LOCK['tag'])
     stdlib=resources/'lib'/py
     shutil.copytree(ROOT/'tmp/build/python3.ios-arm64-py3'/('Python-'+LOCK['python'])/'Lib',stdlib,
                     ignore=shutil.ignore_patterns('test','tests','idlelib','tkinter','ensurepip','__pycache__','*.pyc'))
@@ -143,7 +146,10 @@ def package():
     (stdlib/'lib-dynload/README').write_text('Native extension modules are statically registered by init_librenpy.\n')
     licenses=out/'licenses'; licenses.mkdir()
     shutil.copy2(ROOT/'tmp/build/python3.ios-arm64-py3'/('Python-'+LOCK['python'])/'LICENSE',licenses/'Python.txt')
-    for p in (ROOT/'renpy').glob('LICENSE*'): shutil.copy2(p,licenses/p.name)
+    shutil.copy2(ROOT/'renpy/sphinx/source/license.rst',licenses/'RenPy.rst')
+    shutil.copy2(ROOT/'renpy/src/libhydrogen/LICENSE',licenses/'libhydrogen.txt')
+    with zipfile.ZipFile(ROOT/'tars'/LOCK['cubism']['filename']) as z:
+        (licenses/'Cubism-Core.md').write_bytes(z.read(LOCK['cubism']['directory']+'/Core/LICENSE.md'))
     shutil.copy2(ROOT/'docs/runtime-audit.md',out/'HOST-INTEGRATION.md')
     info={'schema_version':1,'engine_version':LOCK['engine'],'python_version':LOCK['python'],
           'source_commit':output('git','-C',ROOT,'rev-parse','HEAD'),'source_lock':LOCK,
@@ -168,6 +174,15 @@ def main():
     for name,digest in LOCK['inputs'].items():
         if sha(ROOT/name) != digest: raise SystemExit('Source/patch checksum mismatch: '+name)
     fetch('https://github.com/renpy/renpy',LOCK['renpy_commit'],ROOT/'renpy')
+    cubism = LOCK['cubism']
+    archive = ROOT/'tars'/cubism['filename']
+    if not archive.exists(): urllib.request.urlretrieve(cubism['url'],archive)
+    if sha(archive) != cubism['sha256']: raise RuntimeError('Cubism checksum mismatch')
+    with zipfile.ZipFile(archive) as z:
+        for arch in ['arm64','sim-arm64']:
+            dest=ROOT/'tmp'/('install.ios-'+arch)/'include'
+            dest.mkdir(parents=True,exist_ok=True)
+            (dest/'Live2DCubismCore.h').write_bytes(z.read(cubism['directory']+'/Core/include/Live2DCubismCore.h'))
     for name,(url,commit) in LOCK['git_sources'].items():
         fetch(url,commit,ROOT/'tmp/source'/name)
     # Upstream downloads are replaced by immutable checkouts; their patches still apply.

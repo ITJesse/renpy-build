@@ -122,5 +122,11 @@
     "patches/zsync-no-isastty.diff": "0bbda71d959a52d85236a4e1a6ebe2b1d543f4fade065ba6eae782c4c2a15472"
   },
   "build_repository": "https://github.com/renpy/renpy-build",
-  "build_tag": "renpy-8.5.3.26051504"
+  "build_tag": "renpy-8.5.3.26051504",
+  "cubism": {
+    "filename": "CubismSdkForNative-5-r.5-beta.3.zip",
+    "directory": "CubismSdkForNative-5-r.5-beta.3",
+    "url": "https://cubism.live2d.com/sdk-native/bin/CubismSdkForNative-5-r.5-beta.3.zip",
+    "sha256": "ace88fc481fa18ba7697c443ef79c26f06311cf184a40bc2887415b6db7c56ab"
+  }
 }
