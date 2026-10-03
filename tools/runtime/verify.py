@@ -18,7 +18,10 @@ def verify(root):
     actual={str(p.relative_to(root)) for p in root.rglob('*') if p.is_file() and p.name!='SHA256SUMS'}
     if actual!=set(listed): raise ValueError('Manifest does not cover every file')
     py='python'+'.'.join(info['python_version'].split('.')[:2])
+    if set(p.name for p in (root/'platforms').iterdir())!={'iphoneos-arm64','iphonesimulator-arm64'}: raise ValueError('Unexpected platform directory')
+    if list((root/'resources').rglob('*.so')) or list((root/'resources').rglob('*.dylib')): raise ValueError('Host native module leaked into resources')
     for platform,expected in [('iphoneos-arm64','IOS'),('iphonesimulator-arm64','IOSSIMULATOR')]:
+        if set(p.name for p in (root/'platforms'/platform).glob('*.a'))!={'librenpython.a','lib'+py+'.a','librenpy.a'}: raise ValueError('Unexpected archive set')
         for name,symbol in [('librenpython.a','_launcher_main'),('lib'+py+'.a','_Py_Initialize'),('librenpy.a','_init_librenpy')]:
             lib=root/'platforms'/platform/name
             if command('xcrun','lipo','-archs',str(lib)).strip()!='arm64': raise ValueError('Not arm64-only: '+str(lib))

@@ -80,7 +80,8 @@ def native_environment(c):
     if not host:
         cmake += (' -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT='+sdkroot+
                   ' -DCMAKE_OSX_DEPLOYMENT_TARGET='+LOCK['minimum_ios']+' -DCMAKE_MACOSX_BUNDLE=OFF'+
-                  ' -DCMAKE_FIND_ROOT_PATH='+str(c.install)+' -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER')
+                  ' -DCMAKE_FIND_ROOT_PATH='+str(c.install)+' -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER'
+                  ' -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY')
     c.var('cmake_args',cmake)
     c.env('CMAKE_BUILD_PARALLEL_LEVEL',str(min(os.cpu_count() or 2,8)))
 
@@ -91,7 +92,11 @@ def host_python(c):
     c.run('{{configure}} --prefix="{{ host }}" --with-ensurepip=install')
     c.run('{{ make }}')
     c.run('{{ make }} install')
-    c.run('{{ host }}/bin/python3 -m pip install Cython=='+LOCK['cython']+' setuptools==80.9.0')
+    wheelhouse=ROOT/'tmp/tars/python-build-tools'
+    wheelhouse.mkdir(parents=True,exist_ok=True)
+    run(sys.executable,'-m','pip','download','--only-binary=:all:','--no-deps','--dest',wheelhouse,
+        'Cython=='+LOCK['cython'],'setuptools==80.9.0')
+    c.run('{{ host }}/bin/python3 -m pip install --no-index --find-links='+str(wheelhouse)+' Cython=='+LOCK['cython']+' setuptools==80.9.0')
 
 
 def python_post(c):
@@ -145,7 +150,7 @@ def package():
     shutil.copytree(ROOT/'tmp/build/python3.ios-arm64-py3'/('Python-'+LOCK['python'])/'Lib',stdlib,
                     ignore=shutil.ignore_patterns('test','tests','idlelib','tkinter','ensurepip','__pycache__','*.pyc'))
     # Source-only distribution avoids bytecode from the build host leaking into the bundle.
-    run(ROOT/'tmp/host/bin/python3','-m','pip','install','--no-compile','--no-deps','--only-binary=:all:',
+    run(sys.executable,'-m','pip','install','--python-version',LOCK['python'],'--no-compile','--no-deps','--only-binary=:all:',
         '--platform','any','--abi','none','--implementation','py','--require-hashes',
         '--target',stdlib,'-r',ROOT/'tools/runtime/resources-requirements.txt')
     for name,item in LOCK['resource_sources'].items():
@@ -167,6 +172,8 @@ def package():
         shutil.copy2(source,stdlib/name)
     (stdlib/'lib-dynload').mkdir(exist_ok=True)
     (stdlib/'lib-dynload/README').write_text('Native extension modules are statically registered by init_librenpy.\n')
+    run(ROOT/'tmp/host/bin/python3','-c',
+        'import pathlib,sys; root=pathlib.Path(sys.argv[1]); [compile(p.read_bytes(),str(p),"exec") for p in root.rglob("*.py")] ',resources)
     licenses=out/'licenses'; licenses.mkdir()
     shutil.copy2(ROOT/'tmp/build/python3.ios-arm64-py3'/('Python-'+LOCK['python'])/'LICENSE',licenses/'Python.txt')
     shutil.copy2(ROOT/'renpy/sphinx/source/license.rst',licenses/'RenPy.rst')
