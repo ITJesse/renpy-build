@@ -75,7 +75,7 @@ def build(c: Context):
 
     with c.run_group() as g:
 
-        for source in sources:
+        for source in dict.fromkeys(sources):
 
             name, _, ext = str(source.name).rpartition(".")
 
@@ -94,10 +94,10 @@ def build(c: Context):
         g.run("{{ CC }} {{ CFLAGS }} -c inittab.c -o inittab.o")
         objects.append("inittab.o")
 
-    c.var("objects", " ".join(objects))
+    c.var("objects", " ".join(dict.fromkeys(objects)))
 
     c.unlink("librenpy.a")
-    c.run("{{ AR }} r librenpy.a {{ objects }} inittab.o")
+    c.run("{{ AR }} r librenpy.a {{ objects }}")
     c.run("{{ RANLIB }} librenpy.a")
 
     c.copy("librenpy.a", "{{ install }}/lib/librenpy.a")

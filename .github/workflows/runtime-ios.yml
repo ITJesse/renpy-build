@@ -21,7 +21,9 @@ jobs:
           tmp/runtime-tools/bin/pip install Jinja2==3.1.4 MarkupSafe==2.1.5 requests==2.32.3 Cython==3.1.4 cmake==3.31.6 ninja==1.11.1.3
           echo "$PWD/tmp/runtime-tools/bin" >> "$GITHUB_PATH"
       - name: Build arm64 device and arm64 simulator
-        run: python3 tools/runtime/native.py > tmp/runtime-build.log 2>&1
+        run: |
+          set -o pipefail
+          python3 -u tools/runtime/native.py 2>&1 | tee tmp/runtime-build.log
       - name: Retain logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

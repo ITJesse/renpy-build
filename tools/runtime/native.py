@@ -125,6 +125,12 @@ def package():
         for name in ['librenpython.a','lib'+py+'.a','librenpy.a']:
             shutil.copy2(source/'lib'/name,dest/name)
         shutil.copytree(source/'include'/py,dest/'include'/py)
+    from link import link
+    link_results=[]
+    for arch,sdk in [('arm64','iphoneos'),('sim-arm64','iphonesimulator')]:
+        install=ROOT/'tmp'/('install.ios-'+arch)
+        link_results.append(link(out/'platforms'/(sdk+'-arm64'),install/'lib',sdk,LOCK['minimum_ios'],
+                            ROOT/'tmp'/('runtime-link-'+sdk+'.dylib')))
     resources=out/'resources'
     resources.mkdir()
     shutil.copytree(ROOT/'renpy/renpy',resources/'renpy',ignore=shutil.ignore_patterns('*.pyc','*.rpyc','*.pyx','*.pxd','__pycache__'))
@@ -158,7 +164,7 @@ def package():
                        'autoconf':output('autoconf','--version').splitlines()[0], 'cmake':output('cmake','--version').splitlines()[0]},
           'platforms':['iphoneos-arm64','iphonesimulator-arm64'],'minimum_ios':LOCK['minimum_ios'],
           'resource_format':'source-only','host_adaptations':'main.py and helper_tool.rpy remain host-owned; see HOST-INTEGRATION.md',
-          'validation':{'built':True,'game_execution':False,'relaunch_fixed':False}}
+          'validation':{'built':True,'link_checks':link_results,'game_execution':False,'relaunch_fixed':False}}
     (out/'build-info.json').write_text(json.dumps(info,indent=2)+'\n')
     (out/'SHA256SUMS').write_text(''.join(sha(p)+'  '+str(p.relative_to(out))+'\n' for p in sorted(out.rglob('*')) if p.is_file()))
     run(sys.executable,ROOT/'tools/runtime/verify.py',out)
@@ -176,7 +182,7 @@ def main():
     fetch('https://github.com/renpy/renpy',LOCK['renpy_commit'],ROOT/'renpy')
     cubism = LOCK['cubism']
     archive = ROOT/'tars'/cubism['filename']
-    if not archive.exists(): urllib.request.urlretrieve(cubism['url'],archive)
+    if not archive.exists(): run('curl','--fail','--location','--retry','2',cubism['url'],'--output',archive)
     if sha(archive) != cubism['sha256']: raise RuntimeError('Cubism checksum mismatch')
     with zipfile.ZipFile(archive) as z:
         for arch in ['arm64','sim-arm64']:
