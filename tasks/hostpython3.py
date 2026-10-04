@@ -25,9 +25,12 @@ def build_host(c: Context):
 
     c.run("""{{ make }} install""")
 
-    c.rmtree("{{ host }}/lib/python3.9/config-3.9-x86_64-linux-gnu/Tools/")
-    c.run("install -d {{ host }}/lib/python3.9/config-3.9-x86_64-linux-gnu/Tools/")
-    c.run("cp -a Tools/scripts {{ host }}/lib/python3.9/config-3.9-x86_64-linux-gnu/Tools/scripts")
+    # RenPyLinter: the config directory is named after the build machine
+    # (config-3.9-x86_64-linux-gnu upstream, config-3.9-darwin on macOS).
+    c.var("config_dir", next(c.path("{{ host }}/lib/python3.9").glob("config-3.9-*")))
+    c.rmtree("{{ config_dir }}/Tools/")
+    c.run("install -d {{ config_dir }}/Tools/")
+    c.run("cp -a Tools/scripts {{ config_dir }}/Tools/scripts")
 
 
 

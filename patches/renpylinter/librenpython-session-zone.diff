@@ -1,0 +1,202 @@
+--- a/runtime/librenpython3.c
++++ b/runtime/librenpython3.c
+@@ -5,6 +5,11 @@
+ #include <wchar.h>
+ #include "Python.h"
+ 
++#if defined(__APPLE__)
++#include <malloc/malloc.h>
++#include <stdint.h>
++#endif
++
+ /**
+  * A small note on encoding: This does as much as it can in UTF-8 mode,
+  * with the only work done with wchar_t being to test for the actual
+@@ -33,6 +38,120 @@
+ PyConfig config;
+ 
+ /**
++ * RenPyLinter: per-session Python heap.
++ *
++ * The host runs several Ren'Py sessions in one process. All three CPython
++ * allocation domains are routed into a dedicated malloc zone for the duration
++ * of a session, and the zone is destroyed once the Python main function has
++ * returned, so a finished session leaves no Python heap behind.
++ *
++ * The allocator is installed after Py_PreInitialize*() and before
++ * Py_InitializeFromConfig(), the window in which CPython supports
++ * PyMem_SetAllocator(). preconfig.allocator stays PYMEM_ALLOCATOR_NOT_SET.
++ * PYTHONMALLOC, PYTHONDEVMODE and -X dev are not supported with this
++ * launcher: they select a different allocator during pre-initialization.
++ */
++#if defined(__APPLE__)
++
++typedef struct {
++    malloc_zone_t *zone;
++    PyMemAllocatorEx raw;
++    PyMemAllocatorEx mem;
++    PyMemAllocatorEx obj;
++    int installed;
++} RenPyPythonSessionAllocator;
++
++static RenPyPythonSessionAllocator rpl_python_session_allocator;
++
++static void *rpl_zone_malloc(void *ctx, size_t size) {
++    return malloc_zone_malloc((malloc_zone_t *) ctx, size ? size : 1);
++}
++
++static void *rpl_zone_calloc(void *ctx, size_t nelem, size_t elsize) {
++    if (nelem && elsize > SIZE_MAX / nelem) {
++        return NULL;
++    }
++
++    size_t size = nelem * elsize;
++    return malloc_zone_calloc((malloc_zone_t *) ctx, 1, size ? size : 1);
++}
++
++static void *rpl_zone_realloc(void *ctx, void *ptr, size_t new_size) {
++    if (ptr == NULL) {
++        return rpl_zone_malloc(ctx, new_size);
++    }
++
++    return malloc_zone_realloc((malloc_zone_t *) ctx, ptr, new_size ? new_size : 1);
++}
++
++static void rpl_zone_free(void *ctx, void *ptr) {
++    if (ptr) {
++        malloc_zone_free((malloc_zone_t *) ctx, ptr);
++    }
++}
++
++static void rpl_install_python_zone_allocator(void) {
++    RenPyPythonSessionAllocator *session = &rpl_python_session_allocator;
++
++    if (session->installed) {
++        return;
++    }
++
++    session->zone = malloc_create_zone(0, 0);
++
++    if (session->zone == NULL) {
++        return;
++    }
++
++    malloc_set_zone_name(session->zone, "RenPyPythonSession");
++
++    PyMem_GetAllocator(PYMEM_DOMAIN_RAW, &session->raw);
++    PyMem_GetAllocator(PYMEM_DOMAIN_MEM, &session->mem);
++    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &session->obj);
++
++    PyMemAllocatorEx allocator = {
++        .ctx = session->zone,
++        .malloc = rpl_zone_malloc,
++        .calloc = rpl_zone_calloc,
++        .realloc = rpl_zone_realloc,
++        .free = rpl_zone_free,
++    };
++
++    PyMem_SetAllocator(PYMEM_DOMAIN_RAW, &allocator);
++    PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &allocator);
++    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
++
++    session->installed = 1;
++}
++
++static inline __attribute__((always_inline)) void rpl_destroy_python_zone_allocator(void) {
++    RenPyPythonSessionAllocator *session = &rpl_python_session_allocator;
++
++    if (!session->installed) {
++        return;
++    }
++
++    PyMem_SetAllocator(PYMEM_DOMAIN_RAW, &session->raw);
++    PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &session->mem);
++    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &session->obj);
++
++    malloc_zone_pressure_relief(session->zone, 0);
++    malloc_destroy_zone(session->zone);
++
++    memset(session, 0, sizeof(*session));
++}
++
++#else
++
++static void rpl_install_python_zone_allocator(void) {
++}
++
++static inline __attribute__((always_inline)) void rpl_destroy_python_zone_allocator(void) {
++}
++
++#endif
++
++/**
+  * Returns true if every character in a is equivalent to the characters in b0 or b1,
+  * and the strings are of the same length. (This exists because strcasecmp considers
+  * locale, and we don't want that.)
+@@ -344,9 +463,12 @@
+ 
+     preconfig.utf8_mode = 1;
+     preconfig.use_environment = 0;
++    preconfig.allocator = PYMEM_ALLOCATOR_NOT_SET;
+ 
+     Py_PreInitializeFromBytesArgs(&preconfig, argc, argv);
+ 
++    rpl_install_python_zone_allocator();
++
+     init_librenpy();
+ 
+     // Initialize Config.
+@@ -373,8 +495,11 @@
+ 
+     preconfig.utf8_mode = 1;
+     preconfig.use_environment = 0;
++    preconfig.allocator = PYMEM_ALLOCATOR_NOT_SET;
+ 
+     Py_PreInitializeFromArgs(&preconfig, argc, argv);
++
++    rpl_install_python_zone_allocator();
+ 
+     init_librenpy();
+ 
+@@ -403,7 +528,9 @@
+     config.user_site_directory = 0;
+     Py_InitializeFromConfig(&config);
+ 
+-    return Py_BytesMain(argc, argv);
++    int rv = Py_BytesMain(argc, argv);
++    rpl_destroy_python_zone_allocator();
++    return rv;
+ }
+ 
+ int EXPORT renpython_main_wide(int argc, wchar_t **argv) {
+@@ -417,7 +544,9 @@
+     config.user_site_directory = 0;
+     Py_InitializeFromConfig(&config);
+ 
+-    return Py_Main(argc, argv);
++    int rv = Py_Main(argc, argv);
++    rpl_destroy_python_zone_allocator();
++    return rv;
+ }
+ 
+ 
+@@ -455,7 +584,9 @@
+     PyConfig_SetBytesArgv(&config, argc + 1, new_argv);
+     Py_InitializeFromConfig(&config);
+ 
+-    return Py_RunMain();
++    int rv = Py_RunMain();
++    rpl_destroy_python_zone_allocator();
++    return rv;
+ }
+ 
+ /**
+@@ -488,5 +619,7 @@
+     PyConfig_SetArgv(&config, argc + 1, new_argv);
+     Py_InitializeFromConfig(&config);
+ 
+-    return Py_RunMain();
++    int rv = Py_RunMain();
++    rpl_destroy_python_zone_allocator();
++    return rv;
+ }
