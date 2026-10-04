@@ -234,6 +234,13 @@ def python2(c: Context):
     c.rmtree("{{ install }}/lib/{{ pythonver }}/test")
     c.rmtree("{{ install }}/lib/{{ pythonver }}/lib2to3")
 
+    # RenPyLinter: an iOS-only build never runs the desktop steam task that
+    # generates steamapi.py; take the generated copy committed in steamapi/.
+    steamapi = c.path("{{ pytmp }}/steam/steamapi.py")
+    if not steamapi.exists():
+        steamapi.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(c.path("{{ root }}/steamapi/steamapi.py"), steamapi)
+
     search = [
         c.path("{{ install }}/lib/{{ pythonver }}"),
         c.path("{{ install }}/lib/{{ pythonver }}/site-packages"),

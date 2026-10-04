@@ -35,6 +35,10 @@ def host_unpack(c: Context):
     c.chdir("pyobjus")
     c.run("git checkout ea4ef7c96dcc83d5f1f18d4b15f3709f32c47a24")
 
+    # RenPyLinter: enum() with unicode names on Python 2 (the shipped
+    # pyobjus Python files come from this checkout).
+    c.patch("renpylinter/pyobjus-enum-text-names.diff")
+
 
 @task(kind="python", platforms="mac,ios")
 def build(c: Context):

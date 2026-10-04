@@ -30,6 +30,8 @@ def patch_posix(c: Context):
     c.patch("mingw-w64-python2/0855-mingw-fix-ssl-dont-use-enum_certificates.patch")
     c.patch("python2-utf8.diff")
     c.patch("python-c-locale-utf8.diff")
+    # RenPyLinter: configure rejects an arm64 Mac build machine.
+    c.patch("renpylinter/python-2.7.18-macos-arm64-build.diff")
 
 
 @task(kind="python", pythons="2", platforms="ios")
