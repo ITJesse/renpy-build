@@ -348,6 +348,8 @@
     "__ZTVNSt3__119basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
     "__ZTVSt12out_of_range": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
     "___chkstk_darwin": "libSystem: LLVM emits stack probes via ___chkstk_darwin only for iOS 13+ deployment targets.",
+    "_freelocale": "libSystem <xlocale.h>/<locale.h>, iOS 2.0; referenced by the newer legacy-family libraries when an older engine (8.1.3) uses them.",
+    "_hypotf": "libSystem libm (C99), iOS 2.0.",
     "_malloc_create_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
     "_malloc_destroy_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
     "_malloc_set_zone_name": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
@@ -358,9 +360,13 @@
     "_malloc_zone_realloc": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
     "_mkfifoat": "iOS 16.0, weak: CPython 3.12 posixmodule.c calls them only under HAVE_MKFIFOAT_RUNTIME/HAVE_MKNODAT_RUNTIME (__builtin_available(iOS 16.0)); 3.9 checks for NULL.",
     "_mknodat": "iOS 16.0, weak: CPython 3.12 posixmodule.c calls them only under HAVE_MKFIFOAT_RUNTIME/HAVE_MKNODAT_RUNTIME (__builtin_available(iOS 16.0)); 3.9 checks for NULL.",
+    "_newlocale": "libSystem <xlocale.h>/<locale.h>, iOS 2.0; referenced by the newer legacy-family libraries when an older engine (8.1.3) uses them.",
     "_objc_opt_class": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
     "_objc_opt_isKindOfClass": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
     "_objc_opt_new": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
-    "_objc_opt_respondsToSelector": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+)."
+    "_objc_opt_respondsToSelector": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
+    "_strpbrk": "libSystem libc (C89), iOS 2.0.",
+    "_strtok": "libSystem libc (C89), iOS 2.0.",
+    "_uselocale": "libSystem <xlocale.h>/<locale.h>, iOS 2.0; referenced by the newer legacy-family libraries when an older engine (8.1.3) uses them."
   }
 }

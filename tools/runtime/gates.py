@@ -200,6 +200,6 @@ def system_imports_vs_upstream(ours, upstream, reviewed):
     new = sorted(ours - upstream)
     unreviewed = [s for s in new if s not in reviewed]
     if unreviewed:
-        fail("strong system imports not used by upstream's official iOS build and not reviewed for "
+        fail("system imports not used by upstream's official iOS build and not reviewed for "
              f"iOS {xcode_toolchain.MINIMUM_IOS} (families.json reviewed_system_imports): {unreviewed}")
     return {"ours": len(ours), "upstream": len(upstream), "new_reviewed": new}
