@@ -50,8 +50,22 @@ def main():
     sys.path.insert(0, str(root))
 
     import renpybuild.run
-    import renpybuild.task
-    from renpybuild.context import Context
+
+    if (root / "renpybuild" / "task.py").exists():
+        # 7.8 and 8.1+: renpybuild.task / renpybuild.context.
+        import renpybuild.task as framework
+        from renpybuild.context import Context as UpstreamContext
+
+        def make_context(arch):
+            return UpstreamContext("ios", arch, args.python, root, build_args)
+    else:
+        # 7.5 / 8.0: renpybuild.model, whose Context also takes the tmp,
+        # pygame_sdl2 and renpy directories (build.py's defaults).
+        import renpybuild.model as framework
+
+        def make_context(arch):
+            return framework.Context("ios", arch, args.python, root, root / "tmp", root / "pygame_sdl2",
+                                     root / "renpy", build_args)
 
     upstream_environment = renpybuild.run.build_environment
 
@@ -64,7 +78,7 @@ def main():
     import tasks  # noqa: F401  (registers tasks in upstream order)
 
     wanted = set(args.modules)
-    known = {t.name for t in renpybuild.task.tasks}
+    known = {t.name for t in framework.tasks}
     unknown = wanted - known
     if unknown:
         raise SystemExit(f"Unknown task modules for this checkout: {sorted(unknown)}")
@@ -76,14 +90,16 @@ def main():
 
     # The same switches upstream's argparse provides to tasks.
     build_args = types.SimpleNamespace(nostrip=False, sdl=False, experimental=False, stop=None,
-                                       platforms="ios", archs=",".join(archs), pythons=args.python)
+                                       platforms="ios", archs=",".join(archs), pythons=args.python,
+                                       tmp=str(root / "tmp"), pygame_sdl2=str(root / "pygame_sdl2"),
+                                       renpy=str(root / "renpy"))
 
-    for task in renpybuild.task.tasks:
+    for task in framework.tasks:
         if task.name not in wanted:
             continue
 
         for arch in archs:
-            context = Context("ios", arch, args.python, root, build_args)
+            context = make_context(arch)
 
             if task.kind == "cross" and task.name == "toolchain":
                 # Replaces the SDK tarball unpack; mark it complete like upstream would.

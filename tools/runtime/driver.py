@@ -661,6 +661,13 @@ def engine(args):
 
     live2d = install_live2d_header(src, lock, args.live2d_header)
 
+    # Ren'Py's distribution build generates renpy/vc_version.py; upstream's
+    # checkout has one. Without it, setup.py's "import renpy" derives the
+    # version from the git branch, which fails for a detached 7.x checkout.
+    # The SDK's copy (checked against the tag above) is untracked here, so the
+    # pristine renpy/ bundle, built from git's file list, is unaffected.
+    shutil.copy2(vc_version, src / "renpy" / "renpy" / "vc_version.py")
+
     series.apply(src)
     run_tasks(src, lock, version_cfg["python"], version_cfg["engine_modules"])
 

@@ -326,6 +326,33 @@
         "pythonlib",
         "renpython"
       ]
+    },
+    "8.0.3": {
+      "family": "legacy",
+      "framework": "model",
+      "python": "3",
+      "pythonver": "python3.9",
+      "entry_points": [
+        "launcher_main",
+        "launcher_main_wide",
+        "renpython_main",
+        "renpython_main_wide"
+      ],
+      "engine_modules": [
+        "toolchain",
+        "metalangle",
+        "cython",
+        "hostpython3",
+        "python3",
+        "rapt",
+        "pyjnius",
+        "pyobjus",
+        "iossupport",
+        "pygame_sdl2",
+        "librenpy",
+        "pythonlib",
+        "renpython"
+      ]
     }
   },
   "reviewed_system_imports": {
