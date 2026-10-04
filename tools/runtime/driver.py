@@ -399,6 +399,11 @@ def collect_licenses(src, modules, dest):
             found[module] = sorted(str(p.relative_to(dest)) for p in (dest / module).iterdir())
             continue
         roots = [src / "tmp" / "build" / f"{module}.ios-arm64", src / "tmp" / "source" / module]
+        # 8.6's sdl3 and sdl3_image unpack to tmp/source/<Name>-<version>.
+        source = src / "tmp" / "source"
+        if source.is_dir():
+            roots += sorted(p for p in source.iterdir()
+                            if p.is_dir() and p.name.lower().startswith(module + "-"))
         hits = []
         for root in roots:
             if not root.is_dir():
