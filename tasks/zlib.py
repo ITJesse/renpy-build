@@ -11,6 +11,11 @@ def unpack(c: Context):
     c.var("version", version)
     c.run("tar xzf {{source}}/zlib-{{version}}.tar.gz")
 
+    # RenPyLinter: current Apple SDKs define TARGET_OS_MAC, so zlib 1.2.11
+    # turns fdopen() into NULL and breaks <stdio.h>. zlib 1.3.1 drops that.
+    c.chdir("zlib-{{version}}")
+    c.patch("renpylinter/zlib-1.2.11-apple-fdopen.diff")
+
 
 @task()
 def build(c: Context):

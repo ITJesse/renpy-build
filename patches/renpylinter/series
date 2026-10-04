@@ -1,0 +1,19 @@
+# RenPyLinter patch series for this engine branch.
+#
+# Format: <patch file> <where it is applied>
+#   root          applied with `patch -p1` to the renpy-build checkout by
+#                 tools/runtime (renpylinter/tooling) before any task runs
+#   task:<module> applied by tasks/<module>.py to the unpacked source
+#
+# Every file in this directory except this one must be listed.
+#
+# Ren'Py 7.8.2 runs on Python 2.7, which has no PyMem_SetAllocator; the
+# librenpython session zone does not apply (plan 4.1).
+
+# libffi 3.4.5 aarch64 CFI order; Apple clang errors with "invalid CFI
+# advance_loc expression". Upstream libffi 8308bed (#857), released in 3.4.7.
+libffi-aarch64-cfi.diff task:libffi
+
+# zlib 1.2.11 defines fdopen() as NULL when TARGET_OS_MAC is set, which
+# current Apple SDKs do; the block as in zlib 1.3.1.
+zlib-1.2.11-apple-fdopen.diff task:zlib

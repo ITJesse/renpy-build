@@ -38,7 +38,9 @@ def hostbuild(c: Context):
     c.var("version", version)
     c.chdir("freetype-{{version}}")
 
-    c.run("""{{configure}} --prefix="{{ install }}" --with-harfbuzz=yes""")
+    # RenPyLinter: this host build only provides objs/apinames, which does not
+    # use HarfBuzz; upstream's host had libharfbuzz-dev, a macOS host does not.
+    c.run("""{{configure}} --prefix="{{ install }}" --with-harfbuzz=no""")
     c.run("""cp {{source}}/ftoption.h builds/unix/""")
     c.run("""cp {{source}}/ftoption.h builds/mac/""")
     c.run("""cp {{source}}/ftoption.h builds/windows/""")
