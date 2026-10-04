@@ -103,3 +103,24 @@ def external_references(paths, arch="arm64"):
             else:
                 defined.add(symbol)
     return referenced - defined
+
+
+def defined_functions(path):
+    """Text symbols (external and local) defined in an archive."""
+
+    out = run("nm", "-j", "-U", str(path))
+    return {l.strip() for l in out.splitlines() if l.strip() and not l.endswith(":")}
+
+
+def flattened_calls(path, symbol, local, depth=2, seen=None):
+    """call_sequence with calls to functions defined in the archive expanded."""
+
+    seen = set() if seen is None else seen
+    seen.add(symbol)
+    result = []
+    for target in call_sequence(path, symbol):
+        if depth and target in local and target not in seen:
+            result += flattened_calls(path, target, local, depth - 1, seen)
+        else:
+            result.append(target)
+    return result

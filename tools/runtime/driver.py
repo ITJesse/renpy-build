@@ -134,7 +134,8 @@ def prepare(args):
         env = src / "tmp" / "rpl-env"
         if not env.exists():
             run(["uv", "venv", "-q", "--python", lock["host_python"], env])
-            run(["uv", "pip", "install", "-q", "--python", env / "bin" / "python", "-r", src / "requirements.txt"])
+            run(["uv", "pip", "install", "-q", "--python", env / "bin" / "python",
+                 *host_requirements(src, lock)])
 
     tools = src / "tmp" / "rpl-tools"
     if not (tools / "bin" / "python").exists():
@@ -182,6 +183,32 @@ def build_autotools(prefix):
 HOST_LEAKS = ("PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", "CPATH", "C_INCLUDE_PATH",
               "CPLUS_INCLUDE_PATH", "OBJC_INCLUDE_PATH", "LIBRARY_PATH", "CFLAGS", "CXXFLAGS", "CPPFLAGS",
               "LDFLAGS", "SDKROOT", "ACLOCAL_PATH", "MACOSX_DEPLOYMENT_TARGET", "IPHONEOS_DEPLOYMENT_TARGET")
+
+
+def host_requirements(src, lock):
+    """uv arguments for the branch's requirements.txt.
+
+    The lock may skip packages that cannot install on the host Python (with a
+    reason) and add constraints for packages upstream left unpinned whose
+    later releases break the pinned ones.
+    """
+
+    adjust = lock.get("host_requirements", {})
+    skip = {entry["requirement"] for entry in adjust.get("skip", [])}
+    lines = (src / "requirements.txt").read_text().splitlines()
+    kept = [l for l in lines if l.strip() and l.strip() not in skip]
+    missing = skip - {l.strip() for l in lines}
+    if missing:
+        raise SystemExit(f"host_requirements.skip names lines not in requirements.txt: {sorted(missing)}")
+    work = src / "tmp" / "rpl-requirements"
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "requirements.txt").write_text("\n".join(kept) + "\n")
+    args = ["-r", str(work / "requirements.txt")]
+    constraints = [entry["requirement"] for entry in adjust.get("constraints", [])]
+    if constraints:
+        (work / "constraints.txt").write_text("\n".join(constraints) + "\n")
+        args += ["-c", str(work / "constraints.txt")]
+    return args
 
 
 def checkout(path, url, commit):
@@ -267,8 +294,9 @@ def check_branch(src, lock, version):
     if series.digest(src) != lock["patches_sha256"]:
         raise SystemExit(f"patches_sha256 {series.digest(src)} does not match the lock")
     # Root patches applied by an earlier (resumed) run are the only allowed edits.
-    dirty = {line[3:] for line in output(["git", "-C", src, "status", "--porcelain",
-                                          "--untracked-files=no"]).splitlines()}
+    status = subprocess.check_output(["git", "-C", str(src), "status", "--porcelain=v1", "-z",
+                                      "--untracked-files=no"], text=True)
+    dirty = {entry[3:] for entry in status.split("\0") if entry}
     unexpected = dirty - series.root_patch_paths(src)
     if unexpected:
         raise SystemExit(f"{src} has uncommitted changes: {sorted(unexpected)}")
@@ -542,7 +570,10 @@ def check_sdk(src, lock, sdk_tar, work):
     tag_renpy = src / "renpy" / "renpy"
 
     vc = (sdk_renpy / "vc_version.py").read_text()
-    if not re.search(r"^version = u?['\"]" + re.escape(lock["renpy_tag"]) + r"['\"]$", vc, re.M):
+    # 7.8/8.1+ write the full version; 7.5/8.0 only the build number.
+    full = re.search(r"^version = u?['\"]" + re.escape(lock["renpy_tag"]) + r"['\"]$", vc, re.M)
+    build = re.search(r"^vc_version = " + re.escape(lock["renpy_tag"].rsplit(".", 1)[1]) + r"$", vc, re.M)
+    if not (full or build):
         raise SystemExit(f"SDK vc_version.py does not name {lock['renpy_tag']}")
 
     # Every Python source shipped in the SDK must equal the tag's.

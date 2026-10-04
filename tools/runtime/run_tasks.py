@@ -101,6 +101,14 @@ def main():
         for arch in archs:
             context = make_context(arch)
 
+            if task.kind == "host" and framework.__name__ == "renpybuild.model":
+                # As renpybuild.task does: host tasks build for the build
+                # machine. In upstream's full builds the old framework ran
+                # them with the first platform (linux), never with iOS
+                # settings such as -framework MetalANGLE.
+                context.platform = "host"
+                context.arch = "host"
+
             if task.kind == "cross" and task.name == "toolchain":
                 # Replaces the SDK tarball unpack; mark it complete like upstream would.
                 link_sdk(context)

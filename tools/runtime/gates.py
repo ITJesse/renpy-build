@@ -122,6 +122,7 @@ def session_zone(archive):
     if b"RenPyPythonSession" not in Path(archive).read_bytes():
         fail(f"{archive}: RenPyPythonSession marker missing")
     report = {}
+    local = machos.defined_functions(archive)
     for function, main in PYTHON_MAIN.items():
         calls = machos.call_sequence(archive, "_" + function)
         if calls.count(main) != 1:
@@ -129,15 +130,17 @@ def session_zone(archive):
         after = calls[calls.index(main) + 1:][:len(ZONE_EPILOGUE)]
         if after != ZONE_EPILOGUE:
             fail(f"{archive}: {function}: after {main} got {after}, want {ZONE_EPILOGUE}")
-        # The installer may be called or inlined (then malloc_create_zone shows).
-        installs = [i for i, c in enumerate(calls)
-                    if c in ("_rpl_install_python_zone_allocator", "_malloc_create_zone")]
-        install = installs[0] if installs else -1
-        preinit = [i for i, c in enumerate(calls) if c.startswith("_Py_PreInitialize")]
-        initialize = [i for i, c in enumerate(calls) if c == "_Py_InitializeFromConfig"]
-        if not (preinit and initialize and preinit[0] < install < initialize[0]):
+        # The installer may be inlined or sit in a helper (preinitialize());
+        # expand calls into functions defined in the archive and check that it
+        # runs after Py_PreInitialize* and before Python initializes, i.e.
+        # before Py_InitializeFromConfig or the Python main call.
+        flat = machos.flattened_calls(archive, "_" + function, local)
+        installs = [i for i, c in enumerate(flat) if c == "_malloc_create_zone"]
+        preinit = [i for i, c in enumerate(flat) if c.startswith("_Py_PreInitialize")]
+        initialize = [i for i, c in enumerate(flat) if c in ("_Py_InitializeFromConfig", main)]
+        if not (installs and preinit and initialize and preinit[0] < installs[0] < initialize[0]):
             fail(f"{archive}: {function}: allocator install not between Py_PreInitialize* and "
-                 f"Py_InitializeFromConfig: {calls}")
+                 f"Python initialization: {flat}")
         report[function] = {"python_main": main, "after": after}
     return report
 
