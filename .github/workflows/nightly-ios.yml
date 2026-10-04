@@ -1,0 +1,139 @@
+name: Build iOS runtime from the newest Ren'Py nightly
+
+# Moves renpylinter/<version> onto the newest Ren'Py nightly (rebase onto the
+# renpy-build commit it was built from, re-lock its inputs), rebuilds the
+# dependency layer when its recipe changed, and builds and publishes the
+# engine as a prerelease. Nothing is published when nothing changed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Nightly engine (families.json "versions" with a nightly lock)
+        required: true
+        type: choice
+        options: ['8.6.0']
+      build:
+        description: "A specific nightly, e.g. 8.6.0.26100401+nightly.dirty (default: the newest)"
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: renpylinter/${{ inputs.version }}
+      NIGHTLY_BUILD: ${{ inputs.build }}
+    outputs:
+      commit: ${{ steps.bump.outputs.commit }}
+      family: ${{ steps.bump.outputs.family }}
+      deps_current: ${{ steps.bump.outputs.deps_current }}
+      released: ${{ steps.bump.outputs.released }}
+      build: ${{ steps.bump.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          path: src
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Move the branch to the nightly
+        id: bump
+        run: |
+          set -euo pipefail
+          git -C src config user.name "github-actions[bot]"
+          git -C src config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          before=$(git -C src rev-parse HEAD)
+          args=(--src src)
+          if [ -n "$NIGHTLY_BUILD" ]; then args+=(--build "$NIGHTLY_BUILD"); fi
+          python3 tools/runtime/nightly.py bump "${args[@]}" > bump.json
+          cat bump.json
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json
+          d = json.load(open("bump.json"))
+          for k in ("commit", "family", "build"):
+              print(f"{k}={d[k]}")
+          for k in ("changed", "deps_current", "released"):
+              print(f"{k}={'true' if d[k] else 'false'}")
+          EOF
+          if [ "$(git -C src rev-parse HEAD)" != "$before" ]; then
+            git -C src push --force-with-lease="$BRANCH:$before" origin "HEAD:$BRANCH"
+          fi
+
+  deps:
+    needs: bump
+    if: needs.bump.outputs.deps_current != 'true'
+    uses: ./.github/workflows/deps-ios.yml
+    with:
+      family: ${{ needs.bump.outputs.family }}
+      ref: ${{ needs.bump.outputs.commit }}
+      publish: true
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+  link-deps:
+    needs: [bump, deps]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: renpylinter/${{ inputs.version }}
+      RELEASE: ${{ needs.deps.outputs.release }}
+      FAMILY: ${{ needs.bump.outputs.family }}
+      BEFORE: ${{ needs.bump.outputs.commit }}
+    outputs:
+      commit: ${{ steps.link.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump.outputs.commit }}
+          path: src
+          fetch-depth: 0
+      - name: Point the lock at the new dependency layer
+        id: link
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE" || { echo "the deps workflow published no release"; exit 1; }
+          gh release download "$RELEASE" -p "deps-$FAMILY-ios.tar.gz" -D inputs
+          git -C src config user.name "github-actions[bot]"
+          git -C src config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 tools/runtime/nightly.py link-deps --src src --release "$RELEASE" \
+            --tarball "inputs/deps-$FAMILY-ios.tar.gz"
+          git -C src push --force-with-lease="$BRANCH:$BEFORE" origin "HEAD:$BRANCH"
+          echo "commit=$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  # After a new dependency layer, or when the branch's current commit has no
+  # engine release yet; never after a failed or cancelled dependency build.
+  engine:
+    needs: [bump, deps, link-deps]
+    if: >-
+      always() && needs.bump.result == 'success' &&
+      (needs.link-deps.result == 'success' ||
+       (needs.deps.result == 'skipped' && needs.bump.outputs.released != 'true'))
+    uses: ./.github/workflows/engine-ios.yml
+    with:
+      version: ${{ inputs.version }}
+      ref: ${{ needs.link-deps.outputs.commit || needs.bump.outputs.commit }}
+      publish: true
+    secrets: inherit
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write

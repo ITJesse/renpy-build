@@ -32,7 +32,7 @@ gate, so no separate ancient layer exists.
 
 ## Branches
 
-* `renpylinter/tooling` (this branch): `.github/workflows/{deps,engine}-ios.yml`,
+* `renpylinter/tooling` (this branch): `.github/workflows/{deps,engine,nightly}-ios.yml`,
   `tools/runtime/`, `families.json`.
 * `renpylinter/<version>`: the upstream renpy-build tag plus
   `patches/renpylinter/` (with `series`), `renpylinter.lock.json` and minimal
@@ -62,6 +62,28 @@ releases are GitHub prereleases. Differences from released engines:
   build instead requires the deps release's recipe to equal its checkout's.
 * Upstream master downloads some sources at build time (`tmp/tars`); their
   sha256 values are recorded in build-info.json (`downloads`).
+
+`nightly-ios.yml` does a whole nightly round:
+
+```sh
+gh workflow run nightly-ios.yml -f version=8.6.0            # the newest nightly
+gh workflow run nightly-ios.yml -f version=8.6.0 -f build=8.6.0.26100401+nightly.dirty
+```
+
+1. `tools/runtime/nightly.py bump` finds the newest nightly that has an SDK
+   and an iOS build, rebases the branch's own commits onto the renpy-build
+   commit it was built from (a conflict stops the round), locks the
+   nightly's SDK, renios and Ren'Py commit, regenerates the pinned uv.lock
+   (as of the Ren'Py commit, with the package versions the nightly SDK
+   ships) and commits; the branch is force-pushed with a lease.
+2. If the locked deps release was built from another recipe, `deps-ios.yml`
+   rebuilds and publishes the layer and `nightly.py link-deps` commits it
+   to the lock.
+3. `engine-ios.yml` builds that exact commit and publishes the prerelease,
+   unless an engine release already points at it.
+
+Earlier engine releases keep their tags, which hold the commits they were
+built from after the branch moves on.
 
 `series` lists every patch with where it applies: `root` (applied to the
 checkout by the driver, e.g. the librenpython session zone) or

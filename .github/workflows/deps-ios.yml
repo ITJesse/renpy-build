@@ -17,6 +17,23 @@ on:
         required: true
         type: boolean
         default: true
+  workflow_call:
+    inputs:
+      family:
+        required: true
+        type: string
+      ref:
+        description: "Commit of the baseline branch to build (default: the branch head)"
+        required: false
+        type: string
+        default: ''
+      publish:
+        required: true
+        type: boolean
+    outputs:
+      release:
+        description: The deps-<family>-r<N> tag published
+        value: ${{ jobs.release.outputs.tag }}
 
 permissions:
   contents: read
@@ -33,7 +50,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       FAMILY: ${{ inputs.family }}
-      SOURCE_VERSION: ${{ inputs.source_version }}
+      SOURCE_VERSION: ${{ inputs.source_version || '' }}
     outputs:
       bundle: ${{ steps.config.outputs.bundle }}
     steps:
@@ -46,7 +63,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.config.outputs.branch }}
+          ref: ${{ inputs.ref || steps.config.outputs.branch }}
           path: src
           fetch-depth: 0
 
@@ -98,8 +115,10 @@ jobs:
 
   release:
     needs: build
-    if: inputs.publish && inputs.source_version == ''
+    if: inputs.publish && !inputs.source_version
     runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.prepare.outputs.tag }}
     permissions:
       contents: write
       id-token: write
@@ -116,6 +135,7 @@ jobs:
           name: ${{ needs.build.outputs.bundle }}
           path: dist
       - name: Verify bundle and choose revision
+        id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

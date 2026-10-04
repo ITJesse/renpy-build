@@ -240,6 +240,9 @@ def release_prepare(args):
     with open(os.environ["GITHUB_ENV"], "a") as f:
         f.write(f"RELEASE_TAG={tag}\nRELEASE_COMMIT={commit}\nRELEASE_TITLE={tag}: {title_what}\n"
                 f"RELEASE_ARCHIVE={archive}\nRELEASE_PRERELEASE={'1' if prerelease else ''}\n")
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write(f"tag={tag}\n")
     print(f"next release: {tag} at {commit}")
 
 
