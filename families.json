@@ -110,7 +110,9 @@
         "7.8.2",
         "8.1.3",
         "8.2.3",
-        "8.3.7"
+        "8.3.7",
+        "8.0.3",
+        "7.5.3"
       ],
       "deps_modules": [
         "toolchain",
@@ -164,7 +166,10 @@
         "libyuv.a",
         "libz.a"
       ],
-      "overrides": {}
+      "overrides": {
+        "8.0.3": "ancient: linked against the legacy layer as the plan's first attempt; compile, link and system-import gates pass, so no ancient layer was built.",
+        "7.5.3": "ancient: as 8.0.3."
+      }
     }
   },
   "versions": {
@@ -353,9 +358,35 @@
         "pythonlib",
         "renpython"
       ]
+    },
+    "7.5.3": {
+      "family": "legacy",
+      "framework": "model",
+      "python": "2",
+      "pythonver": "python2.7",
+      "entry_points": [
+        "launcher_main",
+        "renpython_main"
+      ],
+      "engine_modules": [
+        "toolchain",
+        "metalangle",
+        "cython",
+        "hostpython2",
+        "python2",
+        "rapt",
+        "pyjnius",
+        "pyobjus",
+        "iossupport",
+        "pygame_sdl2",
+        "librenpy",
+        "pythonlib",
+        "renpython"
+      ]
     }
   },
   "reviewed_system_imports": {
+    "_CCRandomGenerateBytes": "CommonCrypto <CommonCrypto/CommonRandom.h>, iOS 8.0; OpenSSL 1.1.1s in the legacy layer (8.0.3's upstream used 1.1.1g).",
     "_OBJC_CLASS_$_NSConstantArray": "Foundation, iOS 14.0: clang emits constant Objective-C literals only for deployment targets with these classes.",
     "_OBJC_CLASS_$_NSConstantDictionary": "Foundation, iOS 14.0: clang emits constant Objective-C literals only for deployment targets with these classes.",
     "_OBJC_CLASS_$_NSConstantIntegerNumber": "Foundation, iOS 14.0: clang emits constant Objective-C literals only for deployment targets with these classes.",
@@ -375,8 +406,12 @@
     "__ZTVNSt3__119basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
     "__ZTVSt12out_of_range": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
     "___chkstk_darwin": "libSystem: LLVM emits stack probes via ___chkstk_darwin only for iOS 13+ deployment targets.",
+    "___snprintf_chk": "libSystem _FORTIFY_SOURCE checking variants (<secure/_stdio.h>, <secure/_string.h>), iOS 6.0.",
+    "___strncat_chk": "libSystem _FORTIFY_SOURCE checking variant (<secure/_string.h>), iOS 6.0.",
+    "___strncpy_chk": "libSystem _FORTIFY_SOURCE checking variants (<secure/_stdio.h>, <secure/_string.h>), iOS 6.0.",
     "_freelocale": "libSystem <xlocale.h>/<locale.h>, iOS 2.0; referenced by the newer legacy-family libraries when an older engine (8.1.3) uses them.",
     "_hypotf": "libSystem libm (C99), iOS 2.0.",
+    "_log2": "libSystem libm (C99), iOS 2.0.",
     "_malloc_create_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
     "_malloc_destroy_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
     "_malloc_set_zone_name": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
@@ -392,6 +427,7 @@
     "_objc_opt_isKindOfClass": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
     "_objc_opt_new": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
     "_objc_opt_respondsToSelector": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
+    "_pthread_setname_np": "libSystem pthread, iOS 3.2.",
     "_strpbrk": "libSystem libc (C89), iOS 2.0.",
     "_strtok": "libSystem libc (C89), iOS 2.0.",
     "_uselocale": "libSystem <xlocale.h>/<locale.h>, iOS 2.0; referenced by the newer legacy-family libraries when an older engine (8.1.3) uses them."
