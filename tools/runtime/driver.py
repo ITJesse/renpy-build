@@ -52,6 +52,8 @@ UNPACKAGED_MODULES = {"nasm", "metalangle"}
 # Modules built purely from renpy-build's own files.
 FIRST_PARTY = {"toolchain": "source/mockrt.c"}
 
+LICENSE_FALLBACK = {"zlib": ["README"]}
+
 LICENSE_NAME = re.compile(r"^(COPYING|LICEN[CS]E|NOTICE|COPYRIGHT)([._-].*)?$", re.I)
 
 # System frameworks and libraries an iOS app links for the Ren'Py runtime.
@@ -273,6 +275,11 @@ def collect_licenses(src, modules, dest):
                 if path.is_file() and LICENSE_NAME.match(path.name):
                     hits.append(path)
         if not hits:
+            # Sources that keep their license in another file (zlib < 1.2.12: README).
+            for root in roots:
+                for name in LICENSE_FALLBACK.get(module, []):
+                    hits += sorted(p for p in root.glob(f"*/{name}") if p.is_file())
+        if not hits:
             raise SystemExit(f"No license file found for {module} under {roots}")
         for path in hits:
             target = dest / module / path.name
@@ -338,7 +345,7 @@ def deps(args):
                          f"checkout computes {computed['recipe_sha256']}")
 
     series.apply(src)
-    run_tasks(src, lock, baseline_python(config, baseline["version"]), family["deps_modules"])
+    run_tasks(src, lock, config["versions"][source_version]["python"], family["deps_modules"])
 
     if out.exists():
         raise SystemExit(f"{out} exists; refusing to mix with an earlier bundle")
@@ -455,10 +462,6 @@ def deps(args):
         "build_seconds": int(time.time() - started),
     }
     finish(out, info, args.trial)
-
-
-def baseline_python(config, version):
-    return config["versions"][version]["python"]
 
 
 def finish(out, info, trial):
