@@ -51,6 +51,18 @@
       {
         "requirement": "Jinja==1.2",
         "reason": "Jinja 1.x is Python 2 only (its setup.py does not parse on Python 3); build.py and the tasks use Jinja2."
+      },
+      {
+        "requirement": "Sphinx==1.6.6",
+        "reason": "Documentation tooling, not used by build.py or the tasks; its setup.py uses use_2to3, which current setuptools rejects."
+      },
+      {
+        "requirement": "sphinx-bootstrap-theme==0.4.9",
+        "reason": "Documentation tooling, not used by build.py or the tasks; its setup.py uses use_2to3, which current setuptools rejects."
+      },
+      {
+        "requirement": "sphinxcontrib-websupport==1.0.1",
+        "reason": "Documentation tooling, not used by build.py or the tasks; its setup.py uses use_2to3, which current setuptools rejects."
       }
     ],
     "constraints": [
