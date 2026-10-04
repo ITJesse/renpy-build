@@ -37,5 +37,10 @@
     "sha256": "6f1802780d1eb36ff39705e0764f9eeed9b41c313a13ac155270c6f4ad51d53f",
     "secret": "LIVE2D_CUBISM_CORE_H",
     "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
+  },
+  "upstream_renios": {
+    "url": "https://www.renpy.org/dl/8.5.3/renpy-8.5.3-renios.zip",
+    "sha256": "c4fae153e8276ed0faed5e84ea3e0b7c4bf337f0e3208e9130c6a41748a83b2b",
+    "note": "Upstream's official iOS prebuilt archives; baseline for the system import gate only."
   }
 }
