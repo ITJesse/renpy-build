@@ -64,6 +64,8 @@ LINK_FRAMEWORKS = [
     "AudioToolbox", "AVFoundation", "CoreAudio", "CoreBluetooth", "CoreFoundation", "CoreGraphics",
     "CoreHaptics", "CoreMedia", "CoreMotion", "CoreVideo", "Foundation", "GameController",
     "IOKit", "Metal", "OpenGLES", "QuartzCore", "Security", "UIKit", "VideoToolbox", "MetalANGLE",
+    # SDL3_image's ImageIO backend (8.6); upstream's renios project links both.
+    "ImageIO", "MobileCoreServices",
 ]
 LINK_LIBRARIES = ["c++", "iconv"]
 
