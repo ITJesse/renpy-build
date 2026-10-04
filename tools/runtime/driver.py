@@ -193,12 +193,35 @@ def checkout(path, url, commit):
         raise SystemExit(f"{path} is at {git_head(path)}, lock requires {commit}")
 
 
+# Homebrew programs tasks may use. Everything else Homebrew provides (for
+# example sdl2-config or GNU install) stays off PATH, as on upstream's clean
+# build host, so local builds behave like CI.
+HOST_PROGRAMS = ("pkg-config", "ccache", "ld64.lld")
+
+
+def host_bin(src):
+    path = src / "tmp" / "rpl-hostbin"
+    path.mkdir(parents=True, exist_ok=True)
+    for name in HOST_PROGRAMS:
+        target = shutil.which(name)
+        if not target:
+            raise SystemExit(f"{name} is required on the build machine")
+        link = path / name
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(target)
+    return path
+
+
 def task_env(src, lock):
     env = {k: v for k, v in os.environ.items() if k not in HOST_LEAKS}
     # Like `uv run` / an activated venv: the build environment's scripts
-    # (cython, ...) come first, then the pinned build tools.
-    env["PATH"] = f"{build_python(src, lock).parent}:{tool_path(src)}:{env['PATH']}"
+    # (cython, ...) come first, then the pinned build tools, the few host
+    # programs and the system directories.
+    env["PATH"] = ":".join([str(build_python(src, lock).parent), str(tool_path(src)), str(host_bin(src)),
+                            "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
     env["VIRTUAL_ENV"] = str(build_python(src, lock).parent.parent)
+    env["RPL_HOST_LIBRARY_PREFIXES"] = ":".join(xcode_toolchain.host_library_prefixes())
     env["LIBTOOLIZE"] = "glibtoolize"
     env.setdefault("CCACHE_COMPILERCHECK", "content")
     env.setdefault("PYTHONHASHSEED", "0")
@@ -519,7 +542,7 @@ def check_sdk(src, lock, sdk_tar, work):
     tag_renpy = src / "renpy" / "renpy"
 
     vc = (sdk_renpy / "vc_version.py").read_text()
-    if f"version = '{lock['renpy_tag']}'" not in vc:
+    if not re.search(r"^version = u?['\"]" + re.escape(lock["renpy_tag"]) + r"['\"]$", vc, re.M):
         raise SystemExit(f"SDK vc_version.py does not name {lock['renpy_tag']}")
 
     # Every Python source shipped in the SDK must equal the tag's.

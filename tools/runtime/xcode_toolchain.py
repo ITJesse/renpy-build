@@ -52,6 +52,14 @@ HOST_LIBRARIES = ("xz", "openssl@3", "libffi")
 
 @lru_cache(maxsize=None)
 def host_library_prefixes():
+    """Homebrew prefixes of HOST_LIBRARIES.
+
+    Tasks run with Homebrew off PATH, so the driver resolves the prefixes and
+    passes them in RPL_HOST_LIBRARY_PREFIXES.
+    """
+
+    if "RPL_HOST_LIBRARY_PREFIXES" in os.environ:
+        return os.environ["RPL_HOST_LIBRARY_PREFIXES"].split(":")
     return [subprocess.check_output(["brew", "--prefix", f], text=True).strip() for f in HOST_LIBRARIES]
 
 
