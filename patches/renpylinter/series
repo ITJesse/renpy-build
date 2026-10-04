@@ -27,3 +27,8 @@ python-2.7.18-macos-arm64-build.diff task:hostpython2
 # Python 2 (Ren'Py 7.8 uses unicode_literals). Replaces the runtime
 # monkeypatch RenPyLinter carried in its 7.8.2 main.py.
 pyobjus-enum-text-names.diff task:pyobjus
+
+# makesetup lists an object once per Setup line that names it (_math.o,
+# timemodule.o, pwdmodule.o), so libpython2.7.a held duplicate members and
+# could not be force-loaded. Archive each object once; objects unchanged.
+python-2.7.18-libpython-unique-members.diff task:python2
