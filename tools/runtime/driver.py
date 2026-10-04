@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -225,6 +226,24 @@ def checkout(path, url, commit):
 # build host, so local builds behave like CI.
 HOST_PROGRAMS = ("pkg-config", "ccache", "ld64.lld")
 
+# Apple's clang passes the compiler's last -O option on to the Darwin linker
+# verbatim; upstream's clang does not. Apple's ld accepts every level, but
+# ld64.lld only takes a number and fails on -Os ("number expected"), which
+# breaks every command that compiles and links at once, configure's probes
+# included. lld's -O only decides whether bind opcodes in a linked image are
+# compacted and never touches the archived objects, so the wrapper drops the
+# levels lld cannot parse, as if upstream's clang had driven the link.
+LD64_LLD_WRAPPER = """#!/bin/sh
+for arg do
+    shift
+    case $arg in
+        -O|-Os|-Oz|-Og|-Ofast) ;;
+        *) set -- "$@" "$arg" ;;
+    esac
+done
+exec {real} "$@"
+"""
+
 
 def host_bin(src):
     path = src / "tmp" / "rpl-hostbin"
@@ -236,7 +255,11 @@ def host_bin(src):
         link = path / name
         if link.is_symlink() or link.exists():
             link.unlink()
-        link.symlink_to(target)
+        if name == "ld64.lld":
+            link.write_text(LD64_LLD_WRAPPER.format(real=shlex.quote(target)))
+            link.chmod(0o755)
+        else:
+            link.symlink_to(target)
     return path
 
 

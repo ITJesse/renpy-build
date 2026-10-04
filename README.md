@@ -105,6 +105,10 @@ Every version is optimised for size: `xcode_toolchain.py` replaces upstream's
 `CFLAGS`, `CXXFLAGS` and `LDFLAGS`, and builds CMake projects as `MinSizeRel`
 instead of `Release`, whose `-O3` would follow `CFLAGS`. FFmpeg keeps its own
 `-O3`; its archives only serve the link gates.
+Apple's clang, unlike upstream's, passes the last `-O` option on to the linker,
+and `ld64.lld` rejects `-Os`; the driver therefore puts a small `ld64.lld`
+wrapper on the task `PATH` that drops the levels lld cannot parse (lld's `-O`
+only affects bind opcode compaction in linked images, not archived objects).
 
 The build host reproduces upstream's Ubuntu host where it matters:
 
