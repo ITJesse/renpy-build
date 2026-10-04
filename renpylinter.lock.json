@@ -1,0 +1,61 @@
+{
+  "engine": "8.6.0",
+  "renpy_build_ref": "refs/heads/master",
+  "renpy_build_commit": "16129650549f6ccef43d9eab9292701691844ca6",
+  "renpy_version": "8.6.0.26100401",
+  "renpy_commit": "d73101997087742b48efdc56ec263d05aee94b61",
+  "prerelease": {
+    "channel": "nightly",
+    "build": "8.6.0.26100401+nightly.dirty",
+    "page": "https://nightly.renpy.org/8.6.0.26100401+nightly.dirty/",
+    "note": "Ren'Py 8.6.0 is not released. This is the nightly built from renpy-build master and the Ren'Py commit above; renpy-build has no tag for it. 'dirty' only reflects generated files in the nightly's checkout: every Python source in the SDK equals the commit's, apart from the generated renpy/styledata/stylesets.py."
+  },
+  "python": "3.12.8",
+  "host_python": "uv-project",
+  "renpy_uv_lock": {
+    "file": "renpylinter.renpy-uv.lock",
+    "sha256": "235785445bc0d8e4e423f4fd3175d20d121b2f29d0b221b666055bae9b6fcd4d",
+    "note": "Ren'Py removed uv.lock from version control (renpy 9fb435f). Resolved with uv 0.12.3 for the commit's pyproject.toml with --exclude-newer 2026-10-04T03:53:10Z (the commit time), then urllib3 2.7.0, idna 3.18, websockets 17.1 and charset-normalizer 3.4.9 pinned to the versions the nightly SDK ships. The pip task reads its versions from this file."
+  },
+  "renpy_sdk": {
+    "url": "https://nightly.renpy.org/8.6.0.26100401+nightly.dirty/renpy-8.6.0.26100401+nightly.dirty-sdk.tar.bz2",
+    "sha256": "22674c8258f87b1b6e057d408b3924e937c6b46491018be19eff3bb6507258f5",
+    "license": "sphinx/source/license.rst",
+    "note": "Nightly SDKs have no LICENSE.txt; the license text is the commit's sphinx/source/license.rst, the source of the official SDKs' LICENSE.txt."
+  },
+  "deps": {
+    "family": "sdl3",
+    "release": "",
+    "sha256": ""
+  },
+  "sdl": {
+    "library": "SDL3",
+    "release": "sdl3-ios-1-1",
+    "asset": "renpylinter-sdl3-ios-arm64.tar.gz",
+    "sha256": "ec1103d2c78ad8cde55a3a4d3ca679d845c11cdc3562679119e7a62e5cc1368d"
+  },
+  "patches_sha256": "96fa15a55737f6cf2df6618c0bd2a360fc0a00cfb088de10bbe5b8730dd31ea4",
+  "targets": [
+    "ios-arm64",
+    "ios-sim-arm64"
+  ],
+  "minimum_ios": "15.6",
+  "xcode": "26.6",
+  "unsupported_python_settings": [
+    "PYTHONMALLOC",
+    "PYTHONDEVMODE",
+    "-X dev"
+  ],
+  "live2d_header": {
+    "sdk": "CubismSdkForNative-5-r.5",
+    "file": "Core/include/Live2DCubismCore.h",
+    "sha256": "6f1802780d1eb36ff39705e0764f9eeed9b41c313a13ac155270c6f4ad51d53f",
+    "secret": "LIVE2D_CUBISM_CORE_H",
+    "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream's live2d task uses the same CubismSdkForNative-5-r.5."
+  },
+  "upstream_renios": {
+    "url": "https://nightly.renpy.org/8.6.0.26100401+nightly.dirty/renpy-8.6.0.26100401+nightly.dirty-renios.zip",
+    "sha256": "1c00dfff5223c1379aefbd26c446470ff969f3ce7eb17c00d36255d2d4c9a408",
+    "note": "Upstream's iOS prebuilt archives from the same nightly; baseline for the system import gate only."
+  }
+}
