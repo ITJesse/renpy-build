@@ -45,5 +45,19 @@
     "PYTHONMALLOC",
     "PYTHONDEVMODE",
     "-X dev"
-  ]
+  ],
+  "host_requirements": {
+    "skip": [
+      {
+        "requirement": "Jinja==1.2",
+        "reason": "Jinja 1.x is Python 2 only (its setup.py does not parse on Python 3); build.py and the tasks use Jinja2."
+      }
+    ],
+    "constraints": [
+      {
+        "requirement": "MarkupSafe==2.0.1",
+        "reason": "Jinja2==2.10 imports markupsafe.soft_unicode, removed in MarkupSafe 2.1; requirements.txt leaves MarkupSafe unpinned."
+      }
+    ]
+  }
 }
