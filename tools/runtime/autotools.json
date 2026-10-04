@@ -1,10 +1,16 @@
 {
-  "comment": "GNU build tools at the versions of upstream's Ubuntu 24.04 build host, built from verified sources into tmp/rpl-tools in this order. Tasks run autoreconf/autogen, so autoconf/automake/libtool shape the generated configure scripts (CPython 3.12 requires autoconf 2.71). GNU make 4.3 replaces Apple's make 3.81, whose one-second timestamp resolution skips CPython's makesetup step when Modules/Setup is written in the same second as the Makefile. GNU libtool is installed as glibtool/glibtoolize so Apple's libtool stays available.",
+  "comment": "GNU build tools at the versions of upstream's Ubuntu 24.04 build host, built from verified sources into tmp/rpl-tools in this order. Tasks run autoreconf/autogen, so autoconf/automake/libtool shape the generated configure scripts (CPython 3.12 requires autoconf 2.71). GNU make 4.3 replaces Apple's make 3.81, whose one-second timestamp resolution skips CPython's makesetup step when Modules/Setup is written in the same second as the Makefile. GNU sed 4.9 replaces BSD sed for task scripts written for Linux (brotli's bootstrap checks sed --version). GNU libtool is installed as glibtool/glibtoolize so Apple's libtool stays available.",
   "packages": [
     {
       "name": "make",
       "url": "https://ftp.gnu.org/gnu/make/make-4.3.tar.gz",
       "sha256": "e05fdde47c5f7ca45cb697e973894ff4f5d79e13b750ed57d7b66d8defc78e19",
+      "configure": []
+    },
+    {
+      "name": "sed",
+      "url": "https://ftp.gnu.org/gnu/sed/sed-4.9.tar.xz",
+      "sha256": "6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181",
       "configure": []
     },
     {

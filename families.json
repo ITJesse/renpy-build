@@ -105,7 +105,7 @@
         "renpy_build_tag": "renpy-8.3.7.25031702",
         "renpy_build_commit": "7cca685a19d18d8d2c330616fdb160618b5a9669"
       },
-      "recipe_sha256": "0ac1a5efe0570ea4c8b1cc2b16ac928b1656ee2b07fafa41055bddb4174e3397",
+      "recipe_sha256": "506d919e828a3a8f052925d027b44ccbe4b223b9710481aa740f2779c9f4cbd0",
       "members": [
         "7.8.2",
         "8.1.3",
@@ -248,5 +248,40 @@
         "renpython"
       ]
     }
+  },
+  "reviewed_system_imports": {
+    "_OBJC_CLASS_$_NSConstantArray": "Foundation, iOS 14.0: clang emits constant Objective-C literals only for deployment targets with these classes.",
+    "_OBJC_CLASS_$_NSConstantDictionary": "Foundation, iOS 14.0: clang emits constant Objective-C literals only for deployment targets with these classes.",
+    "_OBJC_CLASS_$_NSConstantIntegerNumber": "Foundation, iOS 14.0: clang emits constant Objective-C literals only for deployment targets with these classes.",
+    "_OBJC_CLASS_$_UIWindowScene": "UIKit, iOS 13.0 (SDL2 scene geometry patch in the global sdl2-ios layer).",
+    "__ZNKSt3__115basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEE3strEv": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZNSt12out_of_rangeD1Ev": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZNSt20bad_array_new_lengthC1Ev": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZNSt20bad_array_new_lengthD1Ev": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZNSt3__16localeC1Ev": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTISt12out_of_range": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTISt20bad_array_new_length": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTTNSt3__118basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTTNSt3__119basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTVNSt3__115basic_streambufIcNS_11char_traitsIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTVNSt3__115basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTVNSt3__118basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTVNSt3__119basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "__ZTVSt12out_of_range": "libc++/libc++abi: Apple's libc++ headers only reference dylib definitions available at the deployment target (availability markup); referenced while targeting iOS 15.6.",
+    "___chkstk_darwin": "libSystem: LLVM emits stack probes via ___chkstk_darwin only for iOS 13+ deployment targets.",
+    "_malloc_create_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_malloc_destroy_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_malloc_set_zone_name": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_malloc_zone_calloc": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_malloc_zone_free": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_malloc_zone_malloc": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_malloc_zone_pressure_relief": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_malloc_zone_realloc": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
+    "_mkfifoat": "iOS 16.0, weak: CPython 3.12 posixmodule.c calls them only under HAVE_MKFIFOAT_RUNTIME/HAVE_MKNODAT_RUNTIME (__builtin_available(iOS 16.0)); 3.9 checks for NULL.",
+    "_mknodat": "iOS 16.0, weak: CPython 3.12 posixmodule.c calls them only under HAVE_MKFIFOAT_RUNTIME/HAVE_MKNODAT_RUNTIME (__builtin_available(iOS 16.0)); 3.9 checks for NULL.",
+    "_objc_opt_class": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
+    "_objc_opt_isKindOfClass": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
+    "_objc_opt_new": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+).",
+    "_objc_opt_respondsToSelector": "libobjc: clang emits objc_opt_* entry points only for deployment targets that have them (iOS 13+)."
   }
 }

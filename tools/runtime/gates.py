@@ -1,5 +1,7 @@
 """Release gates. Every check raises GateFailure; nothing is published after one."""
 
+import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -56,7 +58,8 @@ int main(int argc, char **argv) { (void) argc; (void) argv; return 0; }
 """
 
 
-def link(target, *, force_load, archives, frameworks_dir, frameworks, libraries, entry=None, log_dir=None):
+def link(target, *, force_load, archives, frameworks_dir, frameworks, libraries, entry=None, log_dir=None,
+         output=None):
     """Link an empty iOS executable with Apple's ld (as the application does).
 
     ``force_load`` archives are linked whole, so every one of their objects
@@ -85,7 +88,9 @@ def link(target, *, force_load, archives, frameworks_dir, frameworks, libraries,
                 Path(log_dir).mkdir(parents=True, exist_ok=True)
                 (Path(log_dir) / f"link-{target}-{names}.log").write_text(" ".join(cmd) + "\n\n" + result.stderr)
             fail(f"{target}: shell link with force_load={names} failed:\n{result.stderr[-4000:]}")
-        return machos.build_versions(out) and True
+        if output:
+            shutil.copy2(out, output)
+        return True
 
 
 def exports_diff(previous, current):
@@ -179,3 +184,22 @@ def live2d_abi(header_dir):
         if result.returncode != 0:
             fail(f"Live2DCubismCore.h ABI differs from what live2dmodel was written against:\n{result.stderr}")
     return "pass"
+
+
+def system_imports_vs_upstream(ours, upstream, reviewed):
+    """System symbols we reference that upstream's official build does not.
+
+    A strong reference to a symbol missing from the device's libraries stops
+    the app at launch, an unguarded weak one crashes when called; configure
+    link tests do not know the deployment target. Upstream's official renios archives were built
+    against an older SDK, so every system symbol they need exists on old iOS.
+    Anything new must be listed in families.json "reviewed_system_imports"
+    with the evidence that it exists on the minimum iOS version.
+    """
+
+    new = sorted(ours - upstream)
+    unreviewed = [s for s in new if s not in reviewed]
+    if unreviewed:
+        fail("strong system imports not used by upstream's official iOS build and not reviewed for "
+             f"iOS {xcode_toolchain.MINIMUM_IOS} (families.json reviewed_system_imports): {unreviewed}")
+    return {"ours": len(ours), "upstream": len(upstream), "new_reviewed": new}

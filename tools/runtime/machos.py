@@ -77,3 +77,29 @@ def call_sequence(path, symbol):
 
     out = run("objdump", "-d", "-r", "--no-show-raw-insn", f"--disassemble-symbols={symbol}", str(path))
     return re.findall(r"ARM64_RELOC_BRANCH26\s+(\S+)", out)
+
+
+def external_references(paths, arch="arm64"):
+    """Undefined external symbols of ``paths`` that none of them defines.
+
+    These are what system libraries must provide. Weak references are kept:
+    a weak reference to an API newer than the deployment target is NULL on
+    older iOS, which is only safe behind a run-time availability check.
+    Linker-synthesized objc_msgSend$ selector stubs are excluded.
+    """
+
+    defined, referenced = set(), set()
+    for path in paths:
+        for line in run("nm", "-m", "-arch", arch, str(path)).splitlines():
+            if " non-external " in line:
+                continue
+            m = re.search(r"\((undefined|common|[^)]*,[^)]*)\).* external (?:\[[^\]]*\] )?(\S+)", line)
+            if not m:
+                continue
+            section, symbol = m.groups()
+            if section == "undefined":
+                if not symbol.startswith("_objc_msgSend$"):
+                    referenced.add(symbol)
+            else:
+                defined.add(symbol)
+    return referenced - defined

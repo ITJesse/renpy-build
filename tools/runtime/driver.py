@@ -401,6 +401,14 @@ def deps(args):
         (out / "exports").mkdir(exist_ok=True)
         (out / "exports" / f"{target}.txt").write_text("\n".join(lines) + "\n")
 
+    upstream = unpack_upstream_renios(args.upstream_renios, lock, src / "tmp" / "rpl-inputs")
+    gate_report["system_imports"] = {}
+    for target in TARGETS:
+        ours = machos.external_references(sorted((out / target / "lib").glob("*.a"))
+                                          + sorted((out / "link-check" / target).glob("*.a")) + [sdl2[target]])
+        gate_report["system_imports"][target] = gates.system_imports_vs_upstream(
+            ours, upstream_references(upstream, target), config["reviewed_system_imports"])
+
     if args.previous:
         prev_dir = src / "tmp" / "rpl-inputs" / "previous"
         shutil.rmtree(prev_dir, ignore_errors=True)
@@ -561,6 +569,24 @@ def install_live2d_header(src, lock, header):
             "abi": gates.live2d_abi(install_dir(src, "ios-arm64") / "cubism" / "Core" / "include")}
 
 
+def unpack_upstream_renios(zip_path, lock, work):
+    """Upstream's official iOS prebuilt archives, the baseline for system imports."""
+
+    verify_tarball(zip_path, lock["upstream_renios"]["sha256"], "upstream renios")
+    dest = work / "upstream-renios"
+    shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True)
+    run(["unzip", "-q", zip_path, "renios/prototype/prebuilt/*", "-d", dest])
+    return dest / "renios" / "prototype" / "prebuilt"
+
+
+def upstream_references(prebuilt, target):
+    archives = [p for p in sorted((prebuilt / ENGINE_FOLDER[target]).glob("*.a")) if p.name != "libSDL2_test.a"]
+    if not archives:
+        raise SystemExit(f"upstream renios has no {ENGINE_FOLDER[target]} archives")
+    return machos.external_references(archives)
+
+
 def compile_python(hostpython, items):
     """items: [(source, destination, display path)] compiled to unchecked-hash pyc."""
 
@@ -641,6 +667,14 @@ def engine(args):
                    libraries=LINK_LIBRARIES, entry="launcher_main", log_dir=src / "tmp" / "rpl-logs")
         gate_report["links"][target] = {"force_loaded": engine_archives, "entry": "launcher_main",
                                         "result": "pass"}
+
+    upstream = unpack_upstream_renios(args.upstream_renios, lock, src / "tmp" / "rpl-inputs")
+    gate_report["system_imports"] = {}
+    for target in TARGETS:
+        ours = machos.external_references(sorted((out / "lib" / ENGINE_FOLDER[target]).glob("*.a"))
+                                          + sorted((deps_dir / "link-check" / target).glob("*.a")) + [sdl2[target]])
+        gate_report["system_imports"][target] = gates.system_imports_vs_upstream(
+            ours, upstream_references(upstream, target), config["reviewed_system_imports"])
 
     # Python standard library (pythonlib task output).
     stdlib = src / "renpy" / "lib" / pythonver
@@ -764,6 +798,7 @@ def main():
     p.add_argument("--previous", type=Path)
     p.add_argument("--previous-tag")
     p.add_argument("--source-version")
+    p.add_argument("--upstream-renios", type=Path, required=True)
     p.set_defaults(func=deps)
 
     p = sub.add_parser("engine")
@@ -774,6 +809,7 @@ def main():
     p.add_argument("--sdl2", type=Path, required=True)
     p.add_argument("--sdk", type=Path, required=True)
     p.add_argument("--live2d-header", type=Path, required=True)
+    p.add_argument("--upstream-renios", type=Path, required=True)
     p.set_defaults(func=engine)
 
     for name, p in sub.choices.items():

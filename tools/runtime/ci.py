@@ -85,9 +85,21 @@ def deps_config(args):
     print(f"bundle=deps-{env('FAMILY')}{suffix}-ios")
 
 
+def fetch_url(url, dest):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(url) as r, open(dest, "wb") as f:
+        shutil.copyfileobj(r, f)
+    return dest
+
+
+def upstream_renios_path():
+    return INPUTS / "upstream" / Path(lock()["upstream_renios"]["url"]).name
+
+
 def deps_inputs(args):
     l = lock()
     download_release_asset(l["sdl2"]["release"], SDL2_ASSET, INPUTS / "sdl2")
+    fetch_url(l["upstream_renios"]["url"], upstream_renios_path())
     prefix = f"deps-{env('FAMILY')}-r"
     previous = revisions(prefix)
     if previous:
@@ -100,7 +112,8 @@ def deps_build(args):
     version, _ = deps_branch()
     out = DIST / "bundle"
     cmd = [sys.executable, "-u", str(HERE / "driver.py"), "deps", "--family", env("FAMILY"),
-           "--src", str(SRC), "--out", str(out), "--sdl2", str(INPUTS / "sdl2" / SDL2_ASSET)]
+           "--src", str(SRC), "--out", str(out), "--sdl2", str(INPUTS / "sdl2" / SDL2_ASSET),
+           "--upstream-renios", str(upstream_renios_path())]
     if env("SOURCE_VERSION"):
         cmd += ["--source-version", version]
     previous = INPUTS / "previous" / f"deps-{env('FAMILY')}-ios.tar.gz"
@@ -126,10 +139,8 @@ def engine_inputs(args):
         raise SystemExit("renpylinter.lock.json has no deps release yet")
     download_release_asset(l["deps"]["release"], f"deps-{l['deps']['family']}-ios.tar.gz", INPUTS / "deps")
     download_release_asset(l["sdl2"]["release"], SDL2_ASSET, INPUTS / "sdl2")
-    sdk = INPUTS / "sdk" / Path(l["renpy_sdk"]["url"]).name
-    sdk.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(l["renpy_sdk"]["url"]) as r, open(sdk, "wb") as f:
-        shutil.copyfileobj(r, f)
+    fetch_url(l["renpy_sdk"]["url"], INPUTS / "sdk" / Path(l["renpy_sdk"]["url"]).name)
+    fetch_url(l["upstream_renios"]["url"], upstream_renios_path())
 
 
 def engine_build(args):
@@ -141,7 +152,8 @@ def engine_build(args):
                     "--deps", str(INPUTS / "deps" / f"deps-{l['deps']['family']}-ios.tar.gz"),
                     "--sdl2", str(INPUTS / "sdl2" / SDL2_ASSET),
                     "--sdk", str(INPUTS / "sdk" / Path(l["renpy_sdk"]["url"]).name),
-                    "--live2d-header", str(INPUTS / "live2d" / "Live2DCubismCore.h")], check=True)
+                    "--live2d-header", str(INPUTS / "live2d" / "Live2DCubismCore.h"),
+                    "--upstream-renios", str(upstream_renios_path())], check=True)
     pack(out, f"renpy-runtime-{version}-ios.tar.gz")
 
 
