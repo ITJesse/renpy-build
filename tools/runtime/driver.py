@@ -121,13 +121,10 @@ def prepare(args):
     lock = load_lock(src)
 
     renpy = src / "renpy"
-    if not (renpy / ".git").exists():
-        run(["git", "init", "-q", renpy])
-        run(["git", "-C", renpy, "fetch", "-q", "--depth", "1", "https://github.com/renpy/renpy.git",
-             lock["renpy_commit"]])
-        run(["git", "-C", renpy, "checkout", "-q", "FETCH_HEAD"])
-    if git_head(renpy) != lock["renpy_commit"]:
-        raise SystemExit(f"renpy/ is at {git_head(renpy)}, lock requires {lock['renpy_commit']}")
+    checkout(renpy, "https://github.com/renpy/renpy.git", lock["renpy_commit"])
+    # Up to 8.4, pygame_sdl2 is a separate repository next to renpy/.
+    if lock.get("pygame_sdl2_commit"):
+        checkout(src / "pygame_sdl2", "https://github.com/renpy/pygame_sdl2.git", lock["pygame_sdl2_commit"])
 
     if lock["host_python"] == "uv-project":
         run(["uv", "sync", "--project", renpy, "--frozen", "--no-install-project"])
@@ -183,6 +180,15 @@ def build_autotools(prefix):
 HOST_LEAKS = ("PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", "CPATH", "C_INCLUDE_PATH",
               "CPLUS_INCLUDE_PATH", "OBJC_INCLUDE_PATH", "LIBRARY_PATH", "CFLAGS", "CXXFLAGS", "CPPFLAGS",
               "LDFLAGS", "SDKROOT", "ACLOCAL_PATH", "MACOSX_DEPLOYMENT_TARGET", "IPHONEOS_DEPLOYMENT_TARGET")
+
+
+def checkout(path, url, commit):
+    if not (path / ".git").exists():
+        run(["git", "init", "-q", path])
+        run(["git", "-C", path, "fetch", "-q", "--depth", "1", url, commit])
+        run(["git", "-C", path, "checkout", "-q", "FETCH_HEAD"])
+    if git_head(path) != commit:
+        raise SystemExit(f"{path} is at {git_head(path)}, lock requires {commit}")
 
 
 def task_env(src, lock):
@@ -698,6 +704,8 @@ def engine(args):
         "renpy_build": {"branch_commit": git_head(src), "tag": lock["renpy_build_tag"],
                         "tag_commit": lock["renpy_build_commit"]},
         "renpy": {"tag": lock["renpy_tag"], "commit": git_head(src / "renpy")},
+        "pygame_sdl2": ({"tag": lock["pygame_sdl2_tag"], "commit": git_head(src / "pygame_sdl2")}
+                        if lock.get("pygame_sdl2_commit") else None),
         "tooling_commit": git_head(TOOLING),
         "python": lock["python"],
         "deps": {"release": lock["deps"]["release"], "sha256": lock["deps"]["sha256"],

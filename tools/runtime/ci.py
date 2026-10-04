@@ -241,7 +241,8 @@ def release_publish(args):
     subprocess.run(["gh", "api", "--method", "POST", f"repos/{env('GH_REPO')}/git/refs",
                     "-f", f"ref=refs/tags/{tag}", "-f", f"sha={commit}"], check=True)
     archive = Path(env("RELEASE_ARCHIVE"))
-    subprocess.run(["gh", "release", "create", tag, "--verify-tag", "--title", env("RELEASE_TITLE"),
+    subprocess.run(["gh", "release", "create", tag, "--verify-tag", "--target", commit,
+                    "--title", env("RELEASE_TITLE"),
                     "--notes-file", "notes.md", str(archive), str(archive) + ".sha256",
                     str(DIST / "build-info.json"), str(DIST / "SHA256SUMS")], check=True)
 
