@@ -130,6 +130,8 @@ def patch_ios(c: Context):
 
     c.chdir("Python-{{ version }}")
     c.patch("Python-{{ version }}/ios-posixmodule.diff")
+    # RenPyLinter: one archive member per object (see the patch).
+    c.patch("renpylinter/python-3.9.10-libpython-unique-members.diff")
 
     c.run("cp {{patches}}/ios-python2/_scproxy.pyx Modules")
     c.chdir("Modules")
