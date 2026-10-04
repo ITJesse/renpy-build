@@ -1,0 +1,24 @@
+--- a/Makefile.pre.in
++++ b/Makefile.pre.in
+@@ -529,6 +529,12 @@
+ 
+ # Build static library
+ # avoid long command lines, same as LIBRARY_OBJS
++# A module object listed by several Setup lines (math/cmath share _math.o,
++# _socket and datetime list timemodule.c, ...) appears several times in
++# MODOBJS; archive each object once, keeping the order, so the library can
++# be force-loaded.
++rpl_uniq = $(if $1,$(firstword $1) $(call rpl_uniq,$(filter-out $(firstword $1),$1)))
++
+ $(LIBRARY): $(LIBRARY_OBJS)
+ 	-rm -f $@
+ 	$(AR) $(ARFLAGS) $@ Modules/getbuildinfo.o
+@@ -536,7 +542,7 @@
+ 	$(AR) $(ARFLAGS) $@ $(OBJECT_OBJS)
+ 	$(AR) $(ARFLAGS) $@ $(PYTHON_OBJS)
+ 	$(AR) $(ARFLAGS) $@ $(MODULE_OBJS) $(SIGNAL_OBJS)
+-	$(AR) $(ARFLAGS) $@ $(MODOBJS)
++	$(AR) $(ARFLAGS) $@ $(call rpl_uniq,$(MODOBJS))
+ 	$(RANLIB) $@
+ 
+ libpython$(VERSION).so: $(LIBRARY_OBJS)

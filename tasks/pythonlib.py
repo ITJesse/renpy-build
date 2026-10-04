@@ -228,6 +228,15 @@ def pyo_copy(src, dst):
 @task(kind="host-python", pythons="2", always=True)
 def python2(c):
 
+    # RenPyLinter: an iOS-only build never runs the desktop steam task that
+    # generates steamapi.py; take the generated copy committed in steamapi/.
+    steamapi = c.path("{{ pytmp }}/steam/steamapi.py")
+    if not steamapi.exists():
+        steamapi.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(c.path("{{ root }}/steamapi/steamapi.py"), steamapi)
+        # This version only collects existing pyo files, so compile it too.
+        c.run("{{ hostpython }} -OO -m compileall {{ pytmp }}/steam")
+
     search = [
         c.path("{{ install }}/lib/{{ pythonver }}"),
         c.path("{{ install }}/lib/{{ pythonver }}/site-packages"),

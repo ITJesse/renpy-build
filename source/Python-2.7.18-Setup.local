@@ -58,7 +58,7 @@ termios termios.c
 
 {% endif %}
 
-{% if (c.kind != "host") and (c.platform == "mac") %}
+{% if ((c.kind != "host") and (c.platform == "mac")) or ((c.kind == "host") and ("darwin" in build_platform)) %}
 _scproxy ../Mac/Modules/_scproxy.c -framework SystemConfiguration -framework CoreFoundation
 {% endif %}
 

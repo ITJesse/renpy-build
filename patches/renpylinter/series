@@ -1,0 +1,22 @@
+# RenPyLinter patch series for this engine branch.
+#
+# Format: <patch file> <where it is applied>
+#   root          applied with `patch -p1` to the renpy-build checkout by
+#                 tools/runtime (renpylinter/tooling) before any task runs
+#   task:<module> applied by tasks/<module>.py to the unpacked source
+#
+# Every file in this directory except this one must be listed.
+#
+# Ren'Py 7.5.3 runs on Python 2.7, which has no PyMem_SetAllocator; the
+# librenpython session zone does not apply (plan 4.1). 7.5.3 (ancient family)
+# first tries the legacy family dependency layer, as the plan asks.
+
+# The host Python's configure aborts on an arm64 Mac build machine
+# ("Unexpected output of 'arch' on OSX"). The cross build's configure has
+# that check removed by upstream's python2-cross-darwin.diff already.
+python-2.7.18-macos-arm64-build.diff task:hostpython2
+
+# makesetup lists an object once per Setup line that names it (_math.o,
+# timemodule.o, pwdmodule.o), so libpython2.7.a held duplicate members and
+# could not be force-loaded. Archive each object once; objects unchanged.
+python-2.7.18-libpython-unique-members.diff task:python2

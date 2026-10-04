@@ -1,0 +1,24 @@
+--- a/configure
++++ b/configure
+@@ -8471,6 +8471,9 @@
+     	i386)
+     		MACOSX_DEFAULT_ARCH="x86_64"
+     		;;
++    	arm64)
++    		MACOSX_DEFAULT_ARCH="arm64"
++    		;;
+     	ppc)
+     		MACOSX_DEFAULT_ARCH="ppc64"
+     		;;
+--- a/configure.ac
++++ b/configure.ac
+@@ -2063,6 +2063,9 @@
+     	i386) 
+     		MACOSX_DEFAULT_ARCH="x86_64" 
+     		;;
++    	arm64)
++    		MACOSX_DEFAULT_ARCH="arm64"
++    		;;
+     	ppc) 
+     		MACOSX_DEFAULT_ARCH="ppc64" 
+     		;;

@@ -11,6 +11,8 @@ def unpack_hostpython(c):
     c.run("tar xzf {{source}}/Python-{{version}}.tgz")
 
     c.chdir("Python-{{ version }}")
+    # RenPyLinter: configure rejects an arm64 Mac build machine.
+    c.patch("renpylinter/python-2.7.18-macos-arm64-build.diff")
 
 
 @task(kind="host", pythons="2")

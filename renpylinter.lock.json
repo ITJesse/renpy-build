@@ -1,0 +1,70 @@
+{
+  "engine": "7.5.3",
+  "renpy_build_tag": "renpy-7.5.3.22090809",
+  "renpy_build_commit": "08687209018fe4ec031620454957f98e877e4af6",
+  "renpy_tag": "7.5.3.22090809",
+  "renpy_commit": "23e313d5e0376c9a1b13ae6beb7861368f8acc5b",
+  "pygame_sdl2_tag": "renpy-7.5.3.22090809",
+  "pygame_sdl2_commit": "bed8099df753fa656a0723900694f2f8d235da00",
+  "python": "2.7.18",
+  "host_python": "3.8",
+  "renpy_sdk": {
+    "url": "https://www.renpy.org/dl/7.5.3/renpy-7.5.3-sdk.tar.bz2",
+    "sha256": "6ec8c5beb93826b04afeb27b0cbc3e479672191a869bc3e4a1b88dd95cdd515a"
+  },
+  "upstream_renios": {
+    "url": "https://www.renpy.org/dl/7.5.3/renpy-7.5.3-renios.zip",
+    "sha256": "8e123448f13d3e5f78817132e1cef1d607920457f4d6756e64a15164c99f5466",
+    "note": "Upstream's official iOS prebuilt archives; baseline for the system import gate only."
+  },
+  "deps": {
+    "family": "legacy",
+    "release": "deps-legacy-r1",
+    "sha256": "3b541a1e994735fedac20fed908a54c19dae1757ef064f4ce78ce18a8fa2535d",
+    "note": "ancient family: trying the legacy layer first (plan 3.3)"
+  },
+  "sdl2": {
+    "release": "sdl2-ios-6-1",
+    "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1"
+  },
+  "live2d_header": {
+    "sdk": "CubismSdkForNative-5-r.5",
+    "file": "Core/include/Live2DCubismCore.h",
+    "sha256": "6f1802780d1eb36ff39705e0764f9eeed9b41c313a13ac155270c6f4ad51d53f",
+    "secret": "LIVE2D_CUBISM_CORE_H",
+    "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
+  },
+  "patches_sha256": "898127b2da4e3b5ddbcf8726265749df6fe0f935578e9a93534f08dbf711e3d1",
+  "targets": [
+    "ios-arm64",
+    "ios-sim-arm64"
+  ],
+  "minimum_ios": "15.6",
+  "xcode": "26.6",
+  "host_requirements": {
+    "skip": [
+      {
+        "requirement": "Jinja==1.2",
+        "reason": "Jinja 1.x is Python 2 only (its setup.py does not parse on Python 3); build.py and the tasks use Jinja2."
+      },
+      {
+        "requirement": "Sphinx==1.6.6",
+        "reason": "Documentation tooling, not used by build.py or the tasks; its setup.py uses use_2to3, which current setuptools rejects."
+      },
+      {
+        "requirement": "sphinx-bootstrap-theme==0.4.9",
+        "reason": "Documentation tooling, not used by build.py or the tasks; its setup.py uses use_2to3, which current setuptools rejects."
+      },
+      {
+        "requirement": "sphinxcontrib-websupport==1.0.1",
+        "reason": "Documentation tooling, not used by build.py or the tasks; its setup.py uses use_2to3, which current setuptools rejects."
+      }
+    ],
+    "constraints": [
+      {
+        "requirement": "MarkupSafe==2.0.1",
+        "reason": "Jinja2==2.10 imports markupsafe.soft_unicode, removed in MarkupSafe 2.1; requirements.txt leaves MarkupSafe unpinned."
+      }
+    ]
+  }
+}
