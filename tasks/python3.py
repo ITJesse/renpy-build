@@ -108,7 +108,10 @@ def common_post(c: Context):
 
     c.copy("{{ host }}/bin/python3", "{{ install }}/bin/hostpython3")
 
-    for i in ["_sysconfigdata__linux_x86_64-linux-gnu.py"]:
+    # RenPyLinter: copy the build machine's own sysconfigdata (upstream names
+    # the Linux file; on macOS it is _sysconfigdata__darwin_darwin.py).
+    host_lib = c.path("{{ host }}/lib/{{pythonver}}")
+    for i in sorted(p.name for p in host_lib.glob("_sysconfigdata_*.py")):
         c.var("i", i)
 
         c.copy("{{ host }}/lib/{{pythonver}}/{{ i }}", "{{ install }}/lib/{{pythonver}}/{{ i }}")
