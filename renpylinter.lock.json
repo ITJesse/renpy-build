@@ -12,8 +12,15 @@
     "url": "https://www.renpy.org/dl/8.4.1/renpy-8.4.1-sdk.tar.bz2",
     "sha256": "7e398814f242b3c4e51b29b9edb7369d1c71434dacdeb2e83445f11addd55076"
   },
-  "deps": { "family": "modern", "release": null, "sha256": null },
-  "sdl2": { "release": "sdl2-ios-6-1", "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1" },
+  "deps": {
+    "family": "modern",
+    "release": "deps-modern-r1",
+    "sha256": "cd7f86813c460ee3c7fa95e93e7e1325ccc473411f6322622a24f0332a535f70"
+  },
+  "sdl2": {
+    "release": "sdl2-ios-6-1",
+    "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1"
+  },
   "live2d_header": {
     "sdk": "CubismSdkForNative-5-r.5",
     "file": "Core/include/Live2DCubismCore.h",
@@ -22,8 +29,15 @@
     "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
   },
   "patches_sha256": "78ca17d25f2fb7a58d116cc99577307af9759862e0219c0319183c3bc5461e89",
-  "targets": ["ios-arm64", "ios-sim-arm64"],
+  "targets": [
+    "ios-arm64",
+    "ios-sim-arm64"
+  ],
   "minimum_ios": "15.6",
   "xcode": "26.6",
-  "unsupported_python_settings": ["PYTHONMALLOC", "PYTHONDEVMODE", "-X dev"]
+  "unsupported_python_settings": [
+    "PYTHONMALLOC",
+    "PYTHONDEVMODE",
+    "-X dev"
+  ]
 }
