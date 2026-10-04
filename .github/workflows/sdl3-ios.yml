@@ -1,0 +1,77 @@
+name: Build SDL3 for RenPyLinter iOS
+
+on:
+  push:
+    branches:
+      - renpylinter/sdl3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      # The Xcode every RenPyLinter runtime layer is built with (renpylinter.lock.json "xcode").
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install pinned CMake and Ninja (upstream's versions)
+        run: |
+          uv venv -q --python 3.12 "$RUNNER_TEMP/tools"
+          uv pip install -q --python "$RUNNER_TEMP/tools/bin/python" cmake==3.28.3 ninja==1.11.1.4
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
+      - name: Build device and simulator libraries
+        run: python3 tools/build_sdl3_ios.py
+      - name: Upload libraries and build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: renpylinter-sdl3-${{ github.sha }}
+          path: dist/renpylinter-sdl3/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: renpylinter-sdl3-${{ github.sha }}
+          path: bundle
+      - name: Package and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          RELEASE_TAG: sdl3-ios-${{ github.run_number }}-${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd bundle && sha256sum --check SHA256SUMS)
+          version=$(python3 -c 'import json; print(json.load(open("bundle/build-info.json"))["sdl"])')
+          archive="renpylinter-sdl3-ios-arm64.tar.gz"
+          tar -czf "$archive" -C bundle .
+          sha256sum "$archive" > "$archive.sha256"
+          cat > release-notes.md <<EOF
+          SDL $version with Ren'Py's patches (sdl3-opengl-ios, sdl3-metalangle) and the iOS scene orientation fix.
+
+          - Device: arm64 (release/libSDL3.a)
+          - Simulator: arm64 (debug/libSDL3.a)
+          - Source commit: $SOURCE_COMMIT
+          - Minimum deployment target: iOS 15.6, -Os
+
+          The archive includes build-info.json, SDL's license and SHA256SUMS.
+          Only SDL3 is compiled. Ren'Py, SDL3_image and MetalANGLE are not rebuilt.
+          Build success does not establish application or older iOS runtime compatibility.
+          EOF
+          gh release create "$RELEASE_TAG" \
+            --repo "$GH_REPO" --target "$SOURCE_COMMIT" \
+            --title "SDL3 $version for RenPyLinter iOS ($RELEASE_TAG)" \
+            --notes-file release-notes.md \
+            "$archive" "$archive.sha256" bundle/build-info.json

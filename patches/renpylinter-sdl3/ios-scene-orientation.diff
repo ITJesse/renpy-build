@@ -1,0 +1,260 @@
+RenPyLinter: backport SDL #16355 scene orientation support to SDL 3.4.8.
+Upstream: https://github.com/libsdl-org/SDL/commit/114aca1727c755104ecfbd3bf4db986e0ff483e2
+(not in any release-3.4.x tag up to 3.4.18).
+Local adaptation, as in renpylinter/sdl2's ios-scene-geometry.diff and
+ios-window-size-events.diff: the orientation comes from the caller's window
+scene (effectiveGeometry on iOS 26+, interfaceOrientation on iOS 13-25);
+existing UIWindow bounds are used without an orientation flip; Unknown is
+never treated as portrait; each window refreshes its display modes from its
+own scene on layout. SDL3's UIKit driver already reports fullscreen
+dimensions itself, so SDL_video.c needs no change. The camera backend is
+not built (SDL_CAMERA=OFF) and is left unchanged. Applied after Ren'Py's
+sdl3-opengl-ios.diff and sdl3-metalangle.diff.
+
+diff --git a/src/video/uikit/SDL_uikitappdelegate.m b/src/video/uikit/SDL_uikitappdelegate.m
+index 47de977..c0f2498 100644
+--- a/src/video/uikit/SDL_uikitappdelegate.m
++++ b/src/video/uikit/SDL_uikitappdelegate.m
+@@ -67,7 +67,7 @@ int SDL_RunApp(int argc, char *argv[], SDL_main_func mainFunction, void *reserve
+ // Load a launch image using the old UILaunchImageFile-era naming rules.
+ static UIImage *SDL_LoadLaunchImageNamed(NSString *name, int screenh)
+ {
+-    UIInterfaceOrientation curorient = [UIApplication sharedApplication].statusBarOrientation;
++    UIInterfaceOrientation curorient = UIKit_GetInterfaceOrientation(nil, [UIScreen mainScreen]);
+     UIUserInterfaceIdiom idiom = [UIDevice currentDevice].userInterfaceIdiom;
+     UIImage *image = nil;
+ 
+@@ -207,7 +207,7 @@ static UIImage *SDL_LoadLaunchImageNamed(NSString *name, int screenh)
+ 
+ 
+ #if !defined(SDL_PLATFORM_TVOS) && !defined(SDL_PLATFORM_VISIONOS)
+-        UIInterfaceOrientation curorient = [UIApplication sharedApplication].statusBarOrientation;
++        UIInterfaceOrientation curorient = UIKit_GetInterfaceOrientation(nil, [UIScreen mainScreen]);
+ 
+         // We always want portrait-oriented size, to match UILaunchImageSize.
+         if (screenw > screenh) {
+@@ -417,6 +417,18 @@ API_AVAILABLE(ios(13.0))
+     [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
+ }
+ 
++#if !defined(SDL_PLATFORM_TVOS) && !defined(SDL_PLATFORM_VISIONOS) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
++/* Adapted from SDL #16355: scene geometry changes replace the status bar
++ * orientation notification. RenPyLinter reads effectiveGeometry from iOS 26
++ * on (see UIKit_GetInterfaceOrientation), so it listens from iOS 26 on. */
++- (void)windowScene:(UIWindowScene *)windowScene didUpdateEffectiveGeometry:(UIWindowSceneGeometry *)previousEffectiveGeometry API_AVAILABLE(ios(26.0))
++{
++    if (windowScene.effectiveGeometry.interfaceOrientation != previousEffectiveGeometry.interfaceOrientation) {
++        SDL_OnApplicationDidChangeStatusBarOrientation();
++    }
++}
++#endif
++
+ - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts
+ {
+     for (UIOpenURLContext *context in URLContexts) {
+diff --git a/src/video/uikit/SDL_uikitmodes.h b/src/video/uikit/SDL_uikitmodes.h
+index 3d13b52..891b745 100644
+--- a/src/video/uikit/SDL_uikitmodes.h
++++ b/src/video/uikit/SDL_uikitmodes.h
+@@ -44,6 +44,9 @@
+ #ifndef SDL_PLATFORM_VISIONOS
+ extern bool UIKit_IsDisplayLandscape(UIScreen *uiscreen);
+ #endif
++#if !defined(SDL_PLATFORM_TVOS) && !defined(SDL_PLATFORM_VISIONOS)
++extern void UIKit_UpdateWindowDisplayOrientation(SDL_Window *window);
++#endif
+ 
+ extern bool UIKit_InitModes(SDL_VideoDevice *_this);
+ #ifndef SDL_PLATFORM_VISIONOS
+diff --git a/src/video/uikit/SDL_uikitmodes.m b/src/video/uikit/SDL_uikitmodes.m
+index b7cb52e..d565f49 100644
+--- a/src/video/uikit/SDL_uikitmodes.m
++++ b/src/video/uikit/SDL_uikitmodes.m
+@@ -23,6 +23,7 @@
+ #ifdef SDL_VIDEO_DRIVER_UIKIT
+ 
+ #include "SDL_uikitmodes.h"
++#include "SDL_uikitwindow.h"
+ 
+ #include "../../events/SDL_events_c.h"
+ 
+@@ -329,8 +330,13 @@ void UIKit_DelDisplay(UIScreen *uiscreen, bool send_event)
+ bool UIKit_IsDisplayLandscape(UIScreen *uiscreen)
+ {
+ #ifndef SDL_PLATFORM_TVOS
++    UIInterfaceOrientation orient = UIInterfaceOrientationUnknown;
+     if (uiscreen == [UIScreen mainScreen]) {
+-        return UIInterfaceOrientationIsLandscape([UIApplication sharedApplication].statusBarOrientation);
++        orient = UIKit_GetInterfaceOrientation(nil, uiscreen);
++    }
++    // An unknown orientation is not portrait; fall back to the screen bounds.
++    if (orient != UIInterfaceOrientationUnknown) {
++        return UIInterfaceOrientationIsLandscape(orient);
+     } else
+ #endif // !SDL_PLATFORM_TVOS
+     {
+@@ -482,10 +488,13 @@ void UIKit_QuitModes(SDL_VideoDevice *_this)
+ }
+ 
+ #if !defined(SDL_PLATFORM_TVOS) && !defined(SDL_PLATFORM_VISIONOS)
+-void SDL_OnApplicationDidChangeStatusBarOrientation(void)
++static void UIKit_UpdateDisplayOrientation(SDL_VideoDisplay *display, UIInterfaceOrientation orient)
+ {
+-    BOOL isLandscape = UIInterfaceOrientationIsLandscape([UIApplication sharedApplication].statusBarOrientation);
+-    SDL_VideoDisplay *display = SDL_GetVideoDisplay(SDL_GetPrimaryDisplay());
++    BOOL isLandscape;
++    if (orient == UIInterfaceOrientationUnknown) {
++        return;
++    }
++    isLandscape = UIInterfaceOrientationIsLandscape(orient);
+ 
+     if (display) {
+         SDL_DisplayMode *mode = &display->desktop_mode;
+@@ -518,7 +527,7 @@ void SDL_OnApplicationDidChangeStatusBarOrientation(void)
+             }
+         }
+ 
+-        switch ([UIApplication sharedApplication].statusBarOrientation) {
++        switch (orient) {
+         case UIInterfaceOrientationPortrait:
+             orientation = SDL_ORIENTATION_PORTRAIT;
+             break;
+@@ -539,6 +548,24 @@ void SDL_OnApplicationDidChangeStatusBarOrientation(void)
+         SDL_SendDisplayEvent(display, SDL_EVENT_DISPLAY_ORIENTATION, orientation, 0);
+     }
+ }
++
++/* RenPyLinter: scene-based hosts do not receive UIApplication's old status
++ * bar orientation notification. Keep the window's display modes in sync with
++ * the window's own scene before its resize event is delivered. */
++void UIKit_UpdateWindowDisplayOrientation(SDL_Window *window)
++{
++    SDL_UIKitWindowData *data = (__bridge SDL_UIKitWindowData *)window->internal;
++    if (data != nil && data.uiwindow != nil) {
++        UIKit_UpdateDisplayOrientation(SDL_GetVideoDisplayForWindow(window),
++                                       UIKit_GetInterfaceOrientation(data.uiwindow, data.uiwindow.screen));
++    }
++}
++
++void SDL_OnApplicationDidChangeStatusBarOrientation(void)
++{
++    UIKit_UpdateDisplayOrientation(SDL_GetVideoDisplay(SDL_GetPrimaryDisplay()),
++                                   UIKit_GetInterfaceOrientation(nil, [UIScreen mainScreen]));
++}
+ #endif // !SDL_PLATFORM_TVOS
+ 
+ #endif // SDL_VIDEO_DRIVER_UIKIT
+diff --git a/src/video/uikit/SDL_uikitvideo.h b/src/video/uikit/SDL_uikitvideo.h
+index 3db7f9b..0fb7b88 100644
+--- a/src/video/uikit/SDL_uikitvideo.h
++++ b/src/video/uikit/SDL_uikitvideo.h
+@@ -43,6 +43,10 @@ extern CGRect UIKit_ComputeViewFrame(SDL_Window *window, UIScreen *screen);
+ 
+ extern API_AVAILABLE(ios(13.0)) UIWindowScene *UIKit_GetActiveWindowScene(void);
+ 
++#if !defined(SDL_PLATFORM_TVOS) && !defined(SDL_PLATFORM_VISIONOS)
++extern UIInterfaceOrientation UIKit_GetInterfaceOrientation(UIWindow *uiwindow, UIScreen *screen);
++#endif
++
+ extern void UIKit_SetGameControllerInteraction(bool enabled);
+ extern void UIKit_SetViewGameControllerInteraction(UIView *view, bool enabled);
+ 
+diff --git a/src/video/uikit/SDL_uikitvideo.m b/src/video/uikit/SDL_uikitvideo.m
+index 97aeb94..5222a35 100644
+--- a/src/video/uikit/SDL_uikitvideo.m
++++ b/src/video/uikit/SDL_uikitvideo.m
+@@ -225,7 +225,10 @@ CGRect UIKit_ComputeViewFrame(SDL_Window *window, UIScreen *screen)
+      * The uiwindow bounds may be smaller than the screen bounds when Split View
+      * is used on an iPad. */
+     if (data != nil && data.uiwindow != nil) {
+-        frame = data.uiwindow.bounds;
++        /* RenPyLinter: UIWindow bounds already use the window's coordinate
++         * space. Never reinterpret them using a global interface orientation,
++         * including during foreground restoration or iPad window resizing. */
++        return data.uiwindow.bounds;
+     }
+ 
+ #ifndef SDL_PLATFORM_TVOS
+@@ -237,7 +240,10 @@ CGRect UIKit_ComputeViewFrame(SDL_Window *window, UIScreen *screen)
+      * https://bugzilla.libsdl.org/show_bug.cgi?id=3505
+      * https://bugzilla.libsdl.org/show_bug.cgi?id=3465
+      * https://forums.developer.apple.com/thread/65337 */
+-    UIInterfaceOrientation orient = [UIApplication sharedApplication].statusBarOrientation;
++    UIInterfaceOrientation orient = UIKit_GetInterfaceOrientation(nil, screen);
++    if (orient == UIInterfaceOrientationUnknown) {
++        return frame;
++    }
+     BOOL landscape = UIInterfaceOrientationIsLandscape(orient) ||
+                     !(UIKit_GetSupportedOrientations(window) & (UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskPortraitUpsideDown));
+     BOOL fullscreen = CGRectEqualToRect(screen.bounds, frame);
+@@ -255,6 +261,54 @@ CGRect UIKit_ComputeViewFrame(SDL_Window *window, UIScreen *screen)
+ }
+ #endif // SDL_PLATFORM_VISIONOS
+ 
++#if !defined(SDL_PLATFORM_TVOS) && !defined(SDL_PLATFORM_VISIONOS)
++/* Adapted from SDL 114aca1727c755104ecfbd3bf4db986e0ff483e2 (#16355).
++ * RenPyLinter: prefer the caller's window, then a foreground scene on the
++ * caller's screen, rather than whichever scene of the app is active. */
++UIInterfaceOrientation UIKit_GetInterfaceOrientation(UIWindow *uiwindow, UIScreen *screen)
++{
++    if (@available(iOS 13.0, *)) {
++        UIWindowScene *scene = uiwindow.windowScene;
++        if (scene == nil) {
++            for (UIScene *candidate in [UIApplication sharedApplication].connectedScenes) {
++                if (![candidate isKindOfClass:[UIWindowScene class]]) {
++                    continue;
++                }
++                UIWindowScene *windowScene = (UIWindowScene *)candidate;
++                if (windowScene.screen != screen) {
++                    continue;
++                }
++                if (windowScene.activationState == UISceneActivationStateForegroundActive) {
++                    scene = windowScene;
++                    break;
++                }
++                if (windowScene.activationState == UISceneActivationStateForegroundInactive) {
++                    scene = windowScene;
++                }
++            }
++        }
++        if (scene == nil) {
++            return UIInterfaceOrientationUnknown;
++        }
++#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
++        if (@available(iOS 26.0, *)) {
++            return scene.effectiveGeometry.interfaceOrientation;
++        }
++#endif
++        // [iOS 13 Compat] Scene orientation predates effectiveGeometry.
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++        return scene.interfaceOrientation;
++#pragma clang diagnostic pop
++    }
++    // [iOS 12 Compat] Legacy non-scene applications only.
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++    return [UIApplication sharedApplication].statusBarOrientation;
++#pragma clang diagnostic pop
++}
++#endif // !SDL_PLATFORM_TVOS && !SDL_PLATFORM_VISIONOS
++
+ UIWindowScene *UIKit_GetActiveWindowScene(void)
+ {
+     if (@available(iOS 13.0, tvOS 13.0, *)) {
+diff --git a/src/video/uikit/SDL_uikitviewcontroller.m b/src/video/uikit/SDL_uikitviewcontroller.m
+index e9b48c2..200c3e2 100644
+--- a/src/video/uikit/SDL_uikitviewcontroller.m
++++ b/src/video/uikit/SDL_uikitviewcontroller.m
+@@ -209,6 +209,11 @@ static void SDLCALL SDL_HideHomeIndicatorHintChanged(void *userdata, const char
+     int w = (int)size.width;
+     int h = (int)size.height;
+ 
++#if !defined(SDL_PLATFORM_TVOS) && !defined(SDL_PLATFORM_VISIONOS)
++    /* RenPyLinter: refresh this window's display modes from its scene before
++     * fullscreen code can read them. */
++    UIKit_UpdateWindowDisplayOrientation(window);
++#endif
+     SDL_SendWindowEvent(window, SDL_EVENT_WINDOW_RESIZED, w, h);
+ }
+ 

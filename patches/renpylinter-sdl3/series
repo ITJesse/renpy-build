@@ -1,0 +1,4 @@
+# RenPyLinter patches for the global SDL3 layer (tools/build_sdl3_ios.py),
+# applied in this order after upstream's patches/sdl3-opengl-ios.diff and
+# patches/sdl3-metalangle.diff, exactly as tasks/sdl3.py applies those.
+ios-scene-orientation.diff
