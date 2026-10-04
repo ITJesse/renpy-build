@@ -17,8 +17,15 @@
     "sha256": "f45d4663d9bcd84d9488154d92383b6a9773d00a00c25a5780f37ed4649bd6cd",
     "note": "Upstream's official iOS prebuilt archives; baseline for the system import gate only."
   },
-  "deps": { "family": "legacy", "release": null, "sha256": null },
-  "sdl2": { "release": "sdl2-ios-6-1", "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1" },
+  "deps": {
+    "family": "legacy",
+    "release": "deps-legacy-r1",
+    "sha256": "3b541a1e994735fedac20fed908a54c19dae1757ef064f4ce78ce18a8fa2535d"
+  },
+  "sdl2": {
+    "release": "sdl2-ios-6-1",
+    "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1"
+  },
   "live2d_header": {
     "sdk": "CubismSdkForNative-5-r.5",
     "file": "Core/include/Live2DCubismCore.h",
@@ -27,7 +34,10 @@
     "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
   },
   "patches_sha256": "1df39404b1420cba07026baa693ac789911f013f4a3c44efc2bcb56232365ec4",
-  "targets": ["ios-arm64", "ios-sim-arm64"],
+  "targets": [
+    "ios-arm64",
+    "ios-sim-arm64"
+  ],
   "minimum_ios": "15.6",
   "xcode": "26.6"
 }
