@@ -13,8 +13,9 @@
         Build one engine against a released dependency layer, gate it and lay
         out the release bundle in DIR.
 
-SRC is a checkout of a renpylinter/<version> branch. The sdl2 release tarball
-is passed with --sdl2 to both build commands.
+SRC is a checkout of a renpylinter/<version> branch. The global SDL layer's
+release tarball (sdl2-ios-* or sdl3-ios-*, named in the lock) is passed with
+--sdl to both build commands.
 """
 
 import argparse
@@ -44,7 +45,8 @@ import xcode_toolchain  # noqa: E402
 TARGETS = ["ios-arm64", "ios-sim-arm64"]
 ARCH = {"ios-arm64": "arm64", "ios-sim-arm64": "sim-arm64"}
 ENGINE_FOLDER = {"ios-arm64": "release", "ios-sim-arm64": "debug"}
-SDL2_ARCHIVE = {"ios-arm64": "release/libSDL2.a", "ios-sim-arm64": "debug/libSDL2.a"}
+# Global SDL layer: releases built on renpylinter/sdl2 and renpylinter/sdl3.
+SDL_ASSET = {"SDL2": "renpylinter-sdl2-ios-arm64.tar.gz", "SDL3": "renpylinter-sdl3-ios-arm64.tar.gz"}
 
 # Tasks whose outputs are not part of the dependency bundle: build tools,
 # the MetalANGLE framework (global layer) and the SDK link.
@@ -85,6 +87,25 @@ def families():
 
 def load_lock(src):
     return json.loads((src / "renpylinter.lock.json").read_text())
+
+
+def sdl_layer(lock):
+    """The global SDL layer an engine branch links: lock "sdl", or "sdl2" up to 8.5."""
+
+    if "sdl" in lock:
+        layer = dict(lock["sdl"])
+    else:
+        layer = {"library": "SDL2", **lock["sdl2"]}
+    if layer["library"] not in SDL_ASSET:
+        raise SystemExit(f"Unknown global SDL library {layer['library']}")
+    layer.setdefault("asset", SDL_ASSET[layer["library"]])
+    return layer
+
+
+def renpy_version(lock):
+    """The Ren'Py version vc_version.py names: the tag, or a nightly's version."""
+
+    return lock.get("renpy_version") or lock["renpy_tag"]
 
 
 def git_head(path):
@@ -130,6 +151,7 @@ def prepare(args):
         checkout(src / "pygame_sdl2", "https://github.com/renpy/pygame_sdl2.git", lock["pygame_sdl2_commit"])
 
     if lock["host_python"] == "uv-project":
+        install_uv_lock(src, lock)
         run(["uv", "sync", "--project", renpy, "--frozen", "--no-install-project"])
     else:
         env = src / "tmp" / "rpl-env"
@@ -143,6 +165,31 @@ def prepare(args):
         run(["uv", "venv", "-q", "--python", "3.12", tools])
     run(["uv", "pip", "install", "-q", "--python", tools / "bin" / "python", "-r", HERE / "build-tools.txt"])
     build_autotools(tools)
+
+
+def install_uv_lock(src, lock):
+    """Ren'Py 8.6 no longer tracks uv.lock; the branch provides a pinned one.
+
+    renpy/uv.lock is ignored by Ren'Py's .gitignore, so the checkout stays
+    clean. Upstream's pip task reads its package versions from it.
+    """
+
+    pin = lock.get("renpy_uv_lock")
+    target = src / "renpy" / "uv.lock"
+    if not pin:
+        if not target.exists():
+            raise SystemExit("renpy has no uv.lock and the lock names no renpy_uv_lock")
+        return
+    source = src / pin["file"]
+    if bundle.sha256(source) != pin["sha256"]:
+        raise SystemExit(f"{pin['file']} sha256 does not match the lock")
+    tracked = subprocess.run(["git", "-C", str(src / "renpy"), "ls-files", "--error-unmatch", "uv.lock"],
+                             capture_output=True).returncode == 0
+    if tracked:
+        raise SystemExit("renpy tracks uv.lock; drop renpy_uv_lock from the lock")
+    if target.exists() and bundle.sha256(target) != pin["sha256"]:
+        raise SystemExit(f"{target} differs from {pin['file']}")
+    shutil.copy2(source, target)
 
 
 def build_autotools(prefix):
@@ -221,10 +268,11 @@ def checkout(path, url, commit):
         raise SystemExit(f"{path} is at {git_head(path)}, lock requires {commit}")
 
 
-# Homebrew programs tasks may use. Everything else Homebrew provides (for
-# example sdl2-config or GNU install) stays off PATH, as on upstream's clean
-# build host, so local builds behave like CI.
-HOST_PROGRAMS = ("pkg-config", "ccache", "ld64.lld")
+# Host programs tasks may use (8.6's librenpy runs `uv --project renpy run`).
+# Everything else Homebrew provides (for example sdl2-config or GNU install)
+# stays off PATH, as on upstream's clean build host, so local builds behave
+# like CI.
+HOST_PROGRAMS = ("pkg-config", "ccache", "ld64.lld", "uv")
 
 # Apple's clang passes the compiler's last -O option on to the Darwin linker
 # verbatim; upstream's clang does not. Apple's ld accepts every level, but
@@ -275,6 +323,8 @@ def task_env(src, lock):
     env["LIBTOOLIZE"] = "glibtoolize"
     env.setdefault("CCACHE_COMPILERCHECK", "content")
     env.setdefault("PYTHONHASHSEED", "0")
+    # `uv run` in tasks must use the pinned renpy/uv.lock as is, never re-lock.
+    env["UV_FROZEN"] = "1"
     return env
 
 
@@ -296,24 +346,32 @@ def verify_tarball(path, expected, what):
     return actual
 
 
-def unpack_sdl2(tar_path, lock, work):
-    verify_tarball(tar_path, lock["sdl2"]["sha256"], "sdl2 release")
-    dest = work / "sdl2"
+def unpack_sdl(tar_path, lock, work):
+    layer = sdl_layer(lock)
+    verify_tarball(tar_path, layer["sha256"], f"{layer['library']} release")
+    dest = work / "sdl"
     shutil.rmtree(dest, ignore_errors=True)
     bundle.extract(tar_path, dest)
     bundle.verify_sums(dest)
-    return {t: dest / SDL2_ARCHIVE[t] for t in TARGETS}
+    archives = {t: dest / ENGINE_FOLDER[t] / f"lib{layer['library']}.a" for t in TARGETS}
+    for archive in archives.values():
+        if not archive.is_file():
+            raise SystemExit(f"{layer['release']} has no {archive.relative_to(dest)}")
+    return archives
 
 
 def check_branch(src, lock, version):
     if lock["engine"] != version:
         raise SystemExit(f"{src} is the {lock['engine']} branch, not {version}")
-    tag_commit = output(["git", "-C", src, "rev-parse", lock["renpy_build_tag"] + "^{commit}"])
-    if tag_commit != lock["renpy_build_commit"]:
-        raise SystemExit(f"{lock['renpy_build_tag']} is {tag_commit}, lock says {lock['renpy_build_commit']}")
-    merge_base = output(["git", "-C", src, "merge-base", "HEAD", tag_commit])
-    if merge_base != tag_commit:
-        raise SystemExit(f"branch is not based on {lock['renpy_build_tag']}")
+    # Released engines are based on an upstream tag; nightly ones (8.6.0) on
+    # the upstream commit the nightly was built from.
+    base = lock.get("renpy_build_tag") or lock["renpy_build_commit"]
+    base_commit = output(["git", "-C", src, "rev-parse", base + "^{commit}"])
+    if base_commit != lock["renpy_build_commit"]:
+        raise SystemExit(f"{base} is {base_commit}, lock says {lock['renpy_build_commit']}")
+    merge_base = output(["git", "-C", src, "merge-base", "HEAD", base_commit])
+    if merge_base != base_commit:
+        raise SystemExit(f"branch is not based on {base}")
     if series.digest(src) != lock["patches_sha256"]:
         raise SystemExit(f"patches_sha256 {series.digest(src)} does not match the lock")
     # Root patches applied by an earlier (resumed) run are the only allowed edits.
@@ -387,17 +445,28 @@ def weak_export_lines(target_dir):
     return lines
 
 
-def sdl2_tree_info(src):
-    task = (src / "tasks" / "sdl2.py").read_text()
+def sdl_tree_info(src, lock, recipe_modules):
+    """The SDL the dependency tree compiles for headers and SDL*_image."""
+
+    library = sdl_layer(lock)["library"]
+    module = library.lower()
+    task = (src / "tasks" / f"{module}.py").read_text()
     version = re.search(r'^version\s*=\s*"([^"]+)"', task, re.M).group(1)
-    patch_dir = src / "patches" / f"SDL2-{version}"
-    return {
-        "version": version,
-        "source_sha256": bundle.sha256(src / "source" / f"SDL2-{version}.tar.gz"),
-        "patches": {p.name: bundle.sha256(p) for p in sorted(patch_dir.glob("*")) if p.is_file()},
-        "note": "Built in the dependency tree for SDL2_image and pygame_sdl2 headers only; "
-                "libSDL2.a is not part of this bundle (global layer: sdl2-ios release).",
-    }
+    info = {"library": library, "version": version, "recipe": recipe_modules[module],
+            "note": f"Built in the dependency tree for headers and {library}_image only; "
+                    f"lib{library}.a is not part of this bundle (global layer: {module}-ios release)."}
+    if library == "SDL2":
+        info["source_sha256"] = bundle.sha256(src / "source" / f"SDL2-{version}.tar.gz")
+    return info
+
+
+def tars_info(src):
+    """sha256 of every archive tasks downloaded to tmp/tars (8.6+ download at build time)."""
+
+    tars = src / "tmp" / "tars"
+    if not tars.is_dir():
+        return {}
+    return {p.name: bundle.sha256(p) for p in sorted(tars.iterdir()) if p.is_file()}
 
 
 # deps #########################################################################
@@ -420,7 +489,9 @@ def deps(args):
     toolchain = check_xcode(lock, args.trial)
 
     computed = recipe.compute(src, family["deps_modules"])
-    recipe_matches = family["recipe_sha256"] == computed["recipe_sha256"]
+    # Nightly families follow upstream master; their engines check the recipe
+    # against the deps release instead (see engine()).
+    recipe_matches = family["recipe_sha256"] in (None, computed["recipe_sha256"])
     if not recipe_matches and source_version == baseline["version"] and not args.trial:
         raise SystemExit(f"families.json recipe_sha256 for {args.family} is {family['recipe_sha256']}, "
                          f"checkout computes {computed['recipe_sha256']}")
@@ -432,7 +503,7 @@ def deps(args):
         raise SystemExit(f"{out} exists; refusing to mix with an earlier bundle")
     out.mkdir(parents=True)
 
-    sdl2 = unpack_sdl2(args.sdl2, lock, src / "tmp" / "rpl-inputs")
+    sdl = unpack_sdl(args.sdl, lock, src / "tmp" / "rpl-inputs")
     global_archives = set(config["global_archives"])
     expected = set(family["deps_archives"])
 
@@ -478,7 +549,7 @@ def deps(args):
         archives = sorted((out / target / "lib").glob("*.a"))
         info_targets[target] = archive_report(target, archives)
         gate_report["platforms"][target] = "pass"
-        externals = sorted((out / "link-check" / target).glob("*.a")) + [sdl2[target]]
+        externals = sorted((out / "link-check" / target).glob("*.a")) + [sdl[target]]
         for archive in archives:
             gates.link(target, force_load=[archive], archives=archives + externals,
                        frameworks_dir=install_dir(src, target), frameworks=LINK_FRAMEWORKS,
@@ -493,7 +564,7 @@ def deps(args):
     gate_report["system_imports"] = {}
     for target in TARGETS:
         ours = machos.external_references(sorted((out / target / "lib").glob("*.a"))
-                                          + sorted((out / "link-check" / target).glob("*.a")) + [sdl2[target]])
+                                          + sorted((out / "link-check" / target).glob("*.a")) + [sdl[target]])
         gate_report["system_imports"][target] = gates.system_imports_vs_upstream(
             ours, upstream_references(upstream, target), config["reviewed_system_imports"])
 
@@ -529,8 +600,9 @@ def deps(args):
         "build_tools": {"pip": [l for l in (HERE / "build-tools.txt").read_text().split("\n")
                                 if l and not l.startswith("#")],
                         "autotools": json.loads((HERE / "autotools.json").read_text())},
-        "sdl2_build_tree": sdl2_tree_info(src),
-        "sdl2_link_check": {"release": lock["sdl2"]["release"], "sha256": lock["sdl2"]["sha256"]},
+        "sdl_build_tree": sdl_tree_info(src, lock, computed["modules"]),
+        "sdl_link_check": sdl_layer(lock),
+        "downloads": tars_info(src),
         "metalangle": {p.name: bundle.sha256(p) for p in sorted((src / "source").glob("MetalANGLE*"))},
         "modules": family["deps_modules"],
         "archives": info_targets,
@@ -585,7 +657,15 @@ def unpack_deps(src, lock, tar_path, trial=False):
 
 
 def check_sdk(src, lock, sdk_tar, work):
-    """Official SDK: bind it to the tag and take the compiled common scripts."""
+    """Official (or nightly) SDK: bind it to the tag or commit and take the
+    compiled common scripts.
+
+    Returns the compiled scripts, the stale ones, the license file, the SDK's
+    vc_version.py and the Python sources the SDK ships that git does not track
+    (generated by setup.py, e.g. 8.6's renpy/styledata/stylesets.py); the
+    engine build checks after its own generation that it produced each of them
+    identically, and bundles them.
+    """
 
     verify_tarball(sdk_tar, lock["renpy_sdk"]["sha256"], "Ren'Py SDK")
     dest = work / "sdk"
@@ -600,24 +680,29 @@ def check_sdk(src, lock, sdk_tar, work):
     sdk_renpy = sdk_root / "renpy"
     tag_renpy = src / "renpy" / "renpy"
 
+    version = renpy_version(lock)
     vc = (sdk_renpy / "vc_version.py").read_text()
     # 7.8/8.1+ write the full version; 7.5/8.0 only the build number.
-    full = re.search(r"^version = u?['\"]" + re.escape(lock["renpy_tag"]) + r"['\"]$", vc, re.M)
-    build = re.search(r"^vc_version = " + re.escape(lock["renpy_tag"].rsplit(".", 1)[1]) + r"$", vc, re.M)
+    full = re.search(r"^version = u?['\"]" + re.escape(version) + r"['\"]$", vc, re.M)
+    build = re.search(r"^vc_version = " + re.escape(version.rsplit(".", 1)[1]) + r"$", vc, re.M)
     if not (full or build):
-        raise SystemExit(f"SDK vc_version.py does not name {lock['renpy_tag']}")
+        raise SystemExit(f"SDK vc_version.py does not name {version}")
 
-    # Every Python source shipped in the SDK must equal the tag's.
-    differing = []
+    # Every Python source shipped in the SDK must equal the checkout's: the
+    # tracked ones now, the generated ones once the build has generated them.
+    tracked = set(output(["git", "-C", src / "renpy", "ls-files", "renpy"]).splitlines())
+    differing, generated = [], {}
     for py in sorted(sdk_renpy.rglob("*.py")):
         rel = py.relative_to(sdk_renpy)
         if rel.name == "vc_version.py":
             continue
         tag = tag_renpy / rel
-        if not tag.exists() or bundle.sha256(tag) != bundle.sha256(py):
+        if f"renpy/{rel.as_posix()}" not in tracked:
+            generated[str(rel)] = py
+        elif bundle.sha256(tag) != bundle.sha256(py):
             differing.append(str(rel))
     if differing:
-        raise SystemExit(f"SDK renpy/ Python sources differ from tag {lock['renpy_tag']}: {differing[:20]}")
+        raise SystemExit(f"SDK renpy/ Python sources differ from {version}: {differing[:20]}")
 
     magic = re.search(rb'^RPYC_MAGIC\s*=\s*b"([^"]*)"', (tag_renpy / "script.py").read_bytes(), re.M)
     compiled = {}
@@ -628,13 +713,24 @@ def check_sdk(src, lock, sdk_tar, work):
         sources = [tag_renpy / stem, tag_renpy / rel.parent / (rel.stem + "_ren.py")]
         source = next((s for s in sources if s.exists()), None)
         if source is None:
-            raise SystemExit(f"SDK {rel} has no source in tag {lock['renpy_tag']}")
+            raise SystemExit(f"SDK {rel} has no source in {version}")
         if magic:
             digest = hashlib.md5(source.read_bytes() + magic.group(1)).digest()
             if digest != path.read_bytes()[-16:]:
                 stale.append(str(rel))
         compiled[str(rel)] = path
-    return compiled, stale, sdk_root / "LICENSE.txt", sdk_renpy / "vc_version.py"
+
+    # Official SDKs ship LICENSE.txt; nightlies do not, and the lock then names
+    # the Ren'Py file it is made from.
+    license_file = sdk_root / "LICENSE.txt"
+    if not license_file.exists():
+        name = lock["renpy_sdk"].get("license")
+        if not name:
+            raise SystemExit("The SDK has no LICENSE.txt and the lock names no renpy_sdk.license")
+        license_file = src / "renpy" / name
+        if f"{name}" not in output(["git", "-C", src / "renpy", "ls-files", name]).splitlines():
+            raise SystemExit(f"renpy_sdk.license {name} is not tracked by Ren'Py")
+    return compiled, stale, license_file, sdk_renpy / "vc_version.py", generated
 
 
 def install_live2d_header(src, lock, header):
@@ -669,7 +765,8 @@ def unpack_upstream_renios(zip_path, lock, work):
 
 
 def upstream_references(prebuilt, target):
-    archives = [p for p in sorted((prebuilt / ENGINE_FOLDER[target]).glob("*.a")) if p.name != "libSDL2_test.a"]
+    archives = [p for p in sorted((prebuilt / ENGINE_FOLDER[target]).glob("*.a"))
+                if p.name not in ("libSDL2_test.a", "libSDL3_test.a")]
     if not archives:
         raise SystemExit(f"upstream renios has no {ENGINE_FOLDER[target]} archives")
     return machos.external_references(archives)
@@ -718,8 +815,19 @@ def engine(args):
         raise SystemExit("lock and families.json disagree on the family")
 
     deps_dir, deps_sums, deps_info = unpack_deps(src, lock, args.deps, args.trial)
-    sdl2 = unpack_sdl2(args.sdl2, lock, src / "tmp" / "rpl-inputs")
-    sdk_compiled, sdk_stale, renpy_license, vc_version = check_sdk(src, lock, args.sdk, src / "tmp" / "rpl-inputs")
+    sdl = unpack_sdl(args.sdl, lock, src / "tmp" / "rpl-inputs")
+    sdk_compiled, sdk_stale, renpy_license, vc_version, sdk_generated = check_sdk(
+        src, lock, args.sdk, src / "tmp" / "rpl-inputs")
+
+    # A family that follows upstream master has no fixed recipe in
+    # families.json: the deps release must have been built from this
+    # checkout's recipe.
+    family = config["families"][version_cfg["family"]]
+    if family["recipe_sha256"] is None:
+        computed = recipe.compute(src, family["deps_modules"])["recipe_sha256"]
+        if computed != deps_info["recipe_sha256"] and not args.trial:
+            raise SystemExit(f"deps recipe {deps_info['recipe_sha256']} != this checkout's {computed}; "
+                             "rebuild the dependency layer first")
 
     live2d = install_live2d_header(src, lock, args.live2d_header)
 
@@ -732,6 +840,12 @@ def engine(args):
 
     series.apply(src)
     run_tasks(src, lock, version_cfg["python"], version_cfg["engine_modules"])
+
+    # Sources Ren'Py generates (not tracked) must come out as the SDK has them.
+    for rel, sdk_file in sdk_generated.items():
+        ours = src / "renpy" / "renpy" / rel
+        if not ours.exists() or bundle.sha256(ours) != bundle.sha256(sdk_file):
+            gates.fail(f"generated renpy/{rel} differs from the SDK's (or was not generated)")
 
     # The dependency archives the engine was built and is linked against are
     # exactly the released ones.
@@ -772,7 +886,7 @@ def engine(args):
             gate_report["session_zone"][target] = gates.session_zone(librenpython)
 
         all_archives = sorted(folder.glob("*.a"))
-        externals = sorted((deps_dir / "link-check" / target).glob("*.a")) + [sdl2[target]]
+        externals = sorted((deps_dir / "link-check" / target).glob("*.a")) + [sdl[target]]
         gates.link(target, force_load=engine_paths, archives=all_archives + externals,
                    frameworks_dir=install_dir(src, target), frameworks=LINK_FRAMEWORKS,
                    libraries=LINK_LIBRARIES, entry="launcher_main", log_dir=src / "tmp" / "rpl-logs")
@@ -783,7 +897,7 @@ def engine(args):
     gate_report["system_imports"] = {}
     for target in TARGETS:
         ours = machos.external_references(sorted((out / "lib" / ENGINE_FOLDER[target]).glob("*.a"))
-                                          + sorted((deps_dir / "link-check" / target).glob("*.a")) + [sdl2[target]])
+                                          + sorted((deps_dir / "link-check" / target).glob("*.a")) + [sdl[target]])
         gate_report["system_imports"][target] = gates.system_imports_vs_upstream(
             ours, upstream_references(upstream, target), config["reviewed_system_imports"])
 
@@ -791,7 +905,8 @@ def engine(args):
     stdlib = src / "renpy" / "lib" / pythonver
     bundle.copy_tree(stdlib, out / "python" / "lib" / pythonver)
 
-    # Ren'Py: pristine tag sources; .py compiled, SDK-compiled scripts added.
+    # Ren'Py: pristine tag sources and the generated sources the SDK ships;
+    # .py compiled, SDK-compiled scripts added.
     hostpython = install_dir(src, "ios-arm64") / "bin" / f"hostpython{version_cfg['python']}"
     tracked = output(["git", "-C", src / "renpy", "ls-files", "renpy"]).splitlines()
     bytecode = ".pyo" if version_cfg["python"] == "2" else ".pyc"
@@ -813,9 +928,14 @@ def engine(args):
     for name in ("helper_tool.rpy", "main.py"):
         if list((out / "renpy").rglob(name)):
             gates.fail(f"renpy/ must be pristine but contains {name}")
+    for rel in sorted(sdk_generated):
+        path = src / "renpy" / "renpy" / rel
+        dest = (out / "renpy" / rel).with_suffix(bytecode)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        py_items.append((path, dest, f"renpy/{rel}"))
     # vc_version.py is generated by Ren'Py's distribution build, not tracked
     # in git; without it Ren'Py guesses its version. Use the SDK's copy, which
-    # check_sdk() verified names this tag.
+    # check_sdk() verified names this version.
     py_items.append((vc_version, out / "renpy" / ("vc_version" + bytecode), "renpy/vc_version.py"))
     compile_python(hostpython, py_items, version_cfg["python"], commit_time(src))
     for rel, path in sdk_compiled.items():
@@ -824,20 +944,22 @@ def engine(args):
     if list(out.rglob("Live2DCubismCore.h")):
         gates.fail("the proprietary Live2DCubismCore.h must not be bundled")
 
-    py_sources = {r for r in tracked if r.endswith(".py")}
+    py_sources = {r for r in tracked if r.endswith(".py")} | {f"renpy/{r}" for r in sdk_generated}
     pycs = {str(p.relative_to(out)) for p in (out / "renpy").rglob("*" + bytecode)}
     if {r[:-3] + bytecode for r in py_sources} | {"renpy/vc_version" + bytecode} != pycs:
         gates.fail(f"bytecode reconciliation: {len(pycs)} {bytecode} for {len(py_sources)} .py")
-    gate_report["pyc"] = {"py_in_tag": len(py_sources), "pyc": len(pycs),
-                          "suffix": bytecode,
-                          "note": "bytecode = tag .py + vc_version.py from the SDK", "result": "pass"}
+    gate_report["pyc"] = {"py_in_tag": len(py_sources) - len(sdk_generated), "generated": sorted(sdk_generated),
+                          "pyc": len(pycs), "suffix": bytecode,
+                          "note": "bytecode = tag .py + generated .py the SDK ships + vc_version.py from the SDK",
+                          "result": "pass"}
 
     licenses = out / "LICENSES"
     bundle.copy_tree(deps_dir / "LICENSES", licenses)
     python_src = next((src / "tmp" / "build").glob(f"python{version_cfg['python']}.ios-arm64-py*"))
     python_license = next(python_src.glob("Python-*/LICENSE"))
     shutil.copy2(python_license, licenses / "python-LICENSE")
-    # The Ren'Py repository has no license file; the official SDK ships it.
+    # The Ren'Py repository has no license file; the official SDK ships it
+    # (nightlies: the Ren'Py source it is made from, see check_sdk).
     shutil.copy2(renpy_license, licenses / "renpy-LICENSE.txt")
     pyobjus = src / "tmp" / "build" / f"pyobjus.ios-arm64-py{version_cfg['python']}" / "pyobjus" / "LICENSE"
     if pyobjus.exists():
@@ -848,18 +970,21 @@ def engine(args):
         "kind": "engine",
         "engine": args.version,
         "family": lock["deps"]["family"],
-        "renpy_build": {"branch_commit": git_head(src), "tag": lock["renpy_build_tag"],
-                        "tag_commit": lock["renpy_build_commit"]},
-        "renpy": {"tag": lock["renpy_tag"], "commit": git_head(src / "renpy")},
+        "renpy_build": {"branch_commit": git_head(src), "tag": lock.get("renpy_build_tag"),
+                        "ref": lock.get("renpy_build_ref"), "base_commit": lock["renpy_build_commit"]},
+        "renpy": {"tag": lock.get("renpy_tag"), "version": renpy_version(lock), "commit": git_head(src / "renpy")},
+        "prerelease": lock.get("prerelease"),
         "pygame_sdl2": ({"tag": lock["pygame_sdl2_tag"], "commit": git_head(src / "pygame_sdl2")}
                         if lock.get("pygame_sdl2_commit") else None),
         "tooling_commit": git_head(TOOLING),
         "python": lock["python"],
         "deps": {"release": lock["deps"]["release"], "sha256": lock["deps"]["sha256"],
                  "tooling_commit": deps_info["tooling_commit"]},
-        "sdl2": lock["sdl2"],
+        "sdl": sdl_layer(lock),
         "renpy_sdk": {**lock["renpy_sdk"], "compiled_scripts": len(sdk_compiled),
-                      "stale_in_sdk": sdk_stale},
+                      "stale_in_sdk": sdk_stale, "license_from": str(renpy_license.name)},
+        "renpy_uv_lock": lock.get("renpy_uv_lock"),
+        "downloads": tars_info(src),
         "patches_sha256": series.digest(src),
         "patches": series.describe(src),
         "toolchain": toolchain,
@@ -907,7 +1032,7 @@ def main():
     p.add_argument("--family", required=True)
     p.add_argument("--src", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--sdl2", type=Path, required=True)
+    p.add_argument("--sdl", "--sdl2", type=Path, required=True, help="global SDL layer release tarball")
     p.add_argument("--previous", type=Path)
     p.add_argument("--previous-tag")
     p.add_argument("--source-version")
@@ -919,7 +1044,7 @@ def main():
     p.add_argument("--src", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--deps", type=Path, required=True)
-    p.add_argument("--sdl2", type=Path, required=True)
+    p.add_argument("--sdl", "--sdl2", type=Path, required=True, help="global SDL layer release tarball")
     p.add_argument("--sdk", type=Path, required=True)
     p.add_argument("--live2d-header", type=Path, required=True)
     p.add_argument("--upstream-renios", type=Path, required=True)

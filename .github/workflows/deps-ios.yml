@@ -7,7 +7,7 @@ on:
         description: Dependency family (families.json)
         required: true
         type: choice
-        options: [modern, legacy, ancient]
+        options: [sdl3, modern, legacy, ancient]
       source_version:
         description: Build from this member's branch instead of the baseline (verification builds; never published)
         required: false
@@ -50,11 +50,10 @@ jobs:
           path: src
           fetch-depth: 0
 
-      - name: Fetch the upstream tag the branch is based on
-        working-directory: src
+      - name: Fetch the upstream tag or commit the branch is based on
         run: |
-          tag=$(python3 -c 'import json; print(json.load(open("renpylinter.lock.json"))["renpy_build_tag"])')
-          git fetch --no-tags https://github.com/renpy/renpy-build.git "refs/tags/$tag:refs/tags/$tag"
+          ref=$(python3 tools/runtime/ci.py base-ref)
+          git -C src fetch --no-tags https://github.com/renpy/renpy-build.git "$ref"
 
       - uses: astral-sh/setup-uv@v6
 

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Apple's ar for renpy-build tasks that call llvm-ar as "ar --format=darwin".
+#
+# Upstream 8.6+ archives with llvm-ar and asks for the Darwin (BSD) format,
+# the only format Apple's ar writes, but Apple's ar does not accept the
+# option. Drop it and run the Xcode ar named in RPL_APPLE_AR; any other
+# format request is an error.
+for arg do
+    shift
+    case $arg in
+        --format=darwin) ;;
+        --format*) echo "ar-darwin: unsupported $arg" >&2; exit 2 ;;
+        *) set -- "$@" "$arg" ;;
+    esac
+done
+exec "${RPL_APPLE_AR:?RPL_APPLE_AR is not set}" "$@"

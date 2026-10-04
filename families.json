@@ -8,6 +8,8 @@
   "global_archives": [
     "libSDL2.a",
     "libSDL2_test.a",
+    "libSDL3.a",
+    "libSDL3_test.a",
     "libaom.a",
     "libavcodec.a",
     "libavdevice.a",
@@ -28,6 +30,75 @@
     "libswscale.a"
   ],
   "families": {
+    "sdl3": {
+      "baseline": {
+        "version": "8.6.0",
+        "branch": "renpylinter/8.6.0",
+        "renpy_build_ref": "refs/heads/master",
+        "renpy_build_commit": "16129650549f6ccef43d9eab9292701691844ca6"
+      },
+      "track": "nightly",
+      "recipe_sha256": null,
+      "members": [
+        "8.6.0"
+      ],
+      "deps_modules": [
+        "toolchain",
+        "nasm",
+        "metalangle",
+        "zlib",
+        "bzip2",
+        "xz",
+        "brotli",
+        "openssl",
+        "libffi",
+        "libpng",
+        "libjpeg_turbo",
+        "libwebp",
+        "libyuv",
+        "aom",
+        "libavif",
+        "sdl3",
+        "sdl3_image",
+        "ffmpeg",
+        "assimp",
+        "fribidi",
+        "freetype",
+        "harfbuzz",
+        "freetypehb"
+      ],
+      "deps_archives": [
+        "libSDL3_image.a",
+        "libassimp.a",
+        "libavif.a",
+        "libbrotlicommon.a",
+        "libbrotlidec.a",
+        "libbrotlienc.a",
+        "libbz2.a",
+        "libcrypto.a",
+        "libffi.a",
+        "libfreetype.a",
+        "libfribidi.a",
+        "libharfbuzz-cairo.a",
+        "libharfbuzz-subset.a",
+        "libharfbuzz.a",
+        "libjpeg.a",
+        "liblzma.a",
+        "libmockrt.a",
+        "libpng16.a",
+        "libsharpyuv.a",
+        "libssl.a",
+        "libturbojpeg.a",
+        "libwebp.a",
+        "libwebpdemux.a",
+        "libwebpmux.a",
+        "libyuv.a",
+        "libz.a"
+      ],
+      "overrides": {
+        "8.6.0": "Ren'Py nightly built from renpy-build master; every build rebases renpylinter/8.6.0 onto the newest nightly. recipe_sha256 is not fixed here: the engine build requires the deps release's recipe to equal its checkout's."
+      }
+    },
     "modern": {
       "baseline": {
         "version": "8.5.3",
@@ -173,6 +244,32 @@
     }
   },
   "versions": {
+    "8.6.0": {
+      "family": "sdl3",
+      "framework": "task",
+      "python": "3",
+      "pythonver": "python3.12",
+      "entry_points": [
+        "launcher_main",
+        "launcher_main_wide",
+        "renpython_main",
+        "renpython_main_wide"
+      ],
+      "engine_modules": [
+        "toolchain",
+        "metalangle",
+        "cython",
+        "hostpython3",
+        "python3",
+        "rapt",
+        "pyjnius",
+        "pyobjus",
+        "iossupport",
+        "librenpy",
+        "pythonlib",
+        "renpython"
+      ]
+    },
     "8.5.3": {
       "family": "modern",
       "framework": "task",

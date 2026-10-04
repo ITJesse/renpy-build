@@ -11,6 +11,7 @@ Usage: run_tasks.py --root SRC --python 3 --archs arm64,sim-arm64 MODULE...
 """
 
 import argparse
+import inspect
 import os
 import sys
 import types
@@ -56,8 +57,16 @@ def main():
         import renpybuild.task as framework
         from renpybuild.context import Context as UpstreamContext
 
-        def make_context(arch):
-            return UpstreamContext("ios", arch, args.python, root, build_args)
+        if "python" in inspect.signature(UpstreamContext.__init__).parameters:
+            def make_context(arch):
+                return UpstreamContext("ios", arch, args.python, root, build_args)
+        else:
+            # 8.6+: Python 3 only; the Context no longer takes a Python version.
+            if args.python != "3":
+                raise SystemExit("This checkout's framework builds Python 3 only.")
+
+            def make_context(arch):
+                return UpstreamContext("ios", arch, root, build_args)
     else:
         # 7.5 / 8.0: renpybuild.model, whose Context also takes the tmp,
         # pygame_sdl2 and renpy directories (build.py's defaults).

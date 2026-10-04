@@ -7,7 +7,7 @@ on:
         description: Ren'Py engine version (families.json "versions")
         required: true
         type: choice
-        options: ['8.5.3', '8.4.1', '8.3.7', '8.2.3', '8.1.3', '8.0.3', '7.8.2', '7.5.3']
+        options: ['8.6.0', '8.5.3', '8.4.1', '8.3.7', '8.2.3', '8.1.3', '8.0.3', '7.8.2', '7.5.3']
       publish:
         description: Publish a renpy-<version>-r<N> release when every gate passes
         required: true
@@ -44,11 +44,10 @@ jobs:
           path: src
           fetch-depth: 0
 
-      - name: Fetch the upstream tag the branch is based on
-        working-directory: src
+      - name: Fetch the upstream tag or commit the branch is based on
         run: |
-          tag=$(python3 -c 'import json; print(json.load(open("renpylinter.lock.json"))["renpy_build_tag"])')
-          git fetch --no-tags https://github.com/renpy/renpy-build.git "refs/tags/$tag:refs/tags/$tag"
+          ref=$(python3 tools/runtime/ci.py base-ref)
+          git -C src fetch --no-tags https://github.com/renpy/renpy-build.git "$ref"
 
       - uses: astral-sh/setup-uv@v6
 
@@ -61,7 +60,7 @@ jobs:
           key: ccache-engine-${{ inputs.version }}-xcode26.6-${{ github.run_id }}
           restore-keys: ccache-engine-${{ inputs.version }}-xcode26.6-
 
-      - name: Fetch inputs (deps release, SDL2 release, Ren'Py SDK)
+      - name: Fetch inputs (deps release, SDL release, Ren'Py SDK)
         run: python3 tools/runtime/ci.py engine-inputs
 
       - name: Provide Live2DCubismCore.h (proprietary, compile time only)

@@ -30,6 +30,8 @@ _CMAKE_BUILD_TYPE = re.compile(r"-DCMAKE_BUILD_TYPE=\S+")
 # refer to it as {{ config_sub }}.
 CONFIG_SUB = Path(__file__).resolve().parent / "config.sub"
 
+AR_WRAPPER = Path(__file__).resolve().parent / "ar-darwin"
+
 
 # renpy-build arch name -> (Xcode SDK, clang target triple)
 IOS_TARGETS = {
@@ -109,11 +111,21 @@ def _set_tools(c, sdk, target_args):
     c.env("CC", f"ccache {clang} {clang_args} -std=gnu17")
     c.env("CXX", f"ccache {clangxx} {clang_args} -std=gnu++17 {cxx_args}".rstrip())
     c.env("CPP", f"ccache {clang} {clang_args} -E")
-    c.env("AR", tool(sdk, "ar"))
+    # 8.6+ also give CMake an Objective-C compiler; earlier versions leave OBJC unset.
+    if "OBJC" in c.environ:
+        c.env("OBJC", f"ccache {clang} {clang_args}")
+    # Xcode's ar, behind a wrapper that accepts upstream's llvm-ar style
+    # "--format=darwin" (8.6+); see ar-darwin.
+    c.env("RPL_APPLE_AR", tool(sdk, "ar"))
+    c.env("AR", str(AR_WRAPPER))
     c.env("RANLIB", tool(sdk, "ranlib"))
     c.env("STRIP", tool(sdk, "strip"))
     c.env("NM", tool(sdk, "nm"))
     c.var("lipo", tool(sdk, "lipo"))
+    if "otool" in c.variables:
+        c.var("otool", tool(sdk, "otool"))
+    if "INSTALL_NAME_TOOL" in c.environ:
+        c.env("INSTALL_NAME_TOOL", tool(sdk, "install_name_tool"))
 
     for name in ("READELF", "WINDRES", "RC", "LD"):
         c.environ.pop(name, None)
@@ -140,6 +152,11 @@ def _set_optimization(c):
     for name in ("CFLAGS", "CXXFLAGS", "LDFLAGS"):
         rest = _OPTIMIZATION_FLAG.sub("", c.environ.get(name, "")).strip()
         c.environ[name] = f"{OPTIMIZATION} {rest}".rstrip()
+
+    # 8.6+ set OBJCFLAGS (CMake's Objective-C flags, e.g. SDL3's UIKit code).
+    if "OBJCFLAGS" in c.environ:
+        rest = _OPTIMIZATION_FLAG.sub("", c.environ["OBJCFLAGS"]).strip()
+        c.environ["OBJCFLAGS"] = f"{OPTIMIZATION} {rest}".rstrip()
 
     rest = _OPTIMIZATION_FLAG.sub("", c.environ.get("EXTRA_CFLAGS", "")).strip()
     c.environ["EXTRA_CFLAGS"] = f"{rest} {OPTIMIZATION}".lstrip()
@@ -199,7 +216,7 @@ def apply(c):
     _set_tools(c, sdk, f"-target {triple} -isysroot {shlex.quote(sysroot)}")
 
     # The -target triple carries the deployment target; drop upstream's 13.0 flags.
-    for name in ("CFLAGS", "CXXFLAGS", "LDFLAGS", "CPPFLAGS"):
+    for name in ("CFLAGS", "CXXFLAGS", "LDFLAGS", "CPPFLAGS", "OBJCFLAGS"):
         _strip_version_min(c, name)
 
     # Upstream exports IPHONEOS_DEPLOYMENT_TARGET, which Linux compilers ignore.

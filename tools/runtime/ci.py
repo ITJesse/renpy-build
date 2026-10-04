@@ -21,12 +21,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import bundle  # noqa: E402
+import driver  # noqa: E402
 
 ROOT = Path.cwd()
 SRC = ROOT / "src"
 INPUTS = ROOT / "inputs"
 DIST = ROOT / "dist"
-SDL2_ASSET = "renpylinter-sdl2-ios-arm64.tar.gz"
 
 
 def gh(*args):
@@ -92,13 +92,34 @@ def fetch_url(url, dest):
     return dest
 
 
+def sdl_input():
+    """Download the global SDL layer the lock names; return its path."""
+
+    layer = driver.sdl_layer(lock())
+    return download_release_asset(layer["release"], layer["asset"], INPUTS / "sdl")
+
+
+def sdl_path():
+    return INPUTS / "sdl" / driver.sdl_layer(lock())["asset"]
+
+
+def base_ref(args):
+    """The upstream renpy-build ref the branch is based on, for `git fetch`."""
+
+    l = lock()
+    if l.get("renpy_build_tag"):
+        print(f"refs/tags/{l['renpy_build_tag']}:refs/tags/{l['renpy_build_tag']}")
+    else:
+        print(l["renpy_build_commit"])
+
+
 def upstream_renios_path():
     return INPUTS / "upstream" / Path(lock()["upstream_renios"]["url"]).name
 
 
 def deps_inputs(args):
     l = lock()
-    download_release_asset(l["sdl2"]["release"], SDL2_ASSET, INPUTS / "sdl2")
+    sdl_input()
     fetch_url(l["upstream_renios"]["url"], upstream_renios_path())
     prefix = f"deps-{env('FAMILY')}-r"
     previous = revisions(prefix)
@@ -112,7 +133,7 @@ def deps_build(args):
     version, _ = deps_branch()
     out = DIST / "bundle"
     cmd = [sys.executable, "-u", str(HERE / "driver.py"), "deps", "--family", env("FAMILY"),
-           "--src", str(SRC), "--out", str(out), "--sdl2", str(INPUTS / "sdl2" / SDL2_ASSET),
+           "--src", str(SRC), "--out", str(out), "--sdl", str(sdl_path()),
            "--upstream-renios", str(upstream_renios_path())]
     if env("SOURCE_VERSION"):
         cmd += ["--source-version", version]
@@ -138,7 +159,7 @@ def engine_inputs(args):
     if not l["deps"].get("release"):
         raise SystemExit("renpylinter.lock.json has no deps release yet")
     download_release_asset(l["deps"]["release"], f"deps-{l['deps']['family']}-ios.tar.gz", INPUTS / "deps")
-    download_release_asset(l["sdl2"]["release"], SDL2_ASSET, INPUTS / "sdl2")
+    sdl_input()
     fetch_url(l["renpy_sdk"]["url"], INPUTS / "sdk" / Path(l["renpy_sdk"]["url"]).name)
     fetch_url(l["upstream_renios"]["url"], upstream_renios_path())
 
@@ -150,7 +171,7 @@ def engine_build(args):
     subprocess.run([sys.executable, "-u", str(HERE / "driver.py"), "engine", "--version", version,
                     "--src", str(SRC), "--out", str(out),
                     "--deps", str(INPUTS / "deps" / f"deps-{l['deps']['family']}-ios.tar.gz"),
-                    "--sdl2", str(INPUTS / "sdl2" / SDL2_ASSET),
+                    "--sdl", str(sdl_path()),
                     "--sdk", str(INPUTS / "sdk" / Path(l["renpy_sdk"]["url"]).name),
                     "--live2d-header", str(INPUTS / "live2d" / "Live2DCubismCore.h"),
                     "--upstream-renios", str(upstream_renios_path())], check=True)
@@ -212,9 +233,13 @@ def release_prepare(args):
     tag = prefix + str((revisions(prefix) or [0])[-1] + 1)
     notes = render_notes(info, archive.name)
     Path("notes.md").write_text(notes)
+    # Engines built from a Ren'Py nightly are published as prereleases.
+    prerelease = bool(info.get("prerelease"))
+    if prerelease:
+        title_what += f" (nightly {info['prerelease']['build']})"
     with open(os.environ["GITHUB_ENV"], "a") as f:
         f.write(f"RELEASE_TAG={tag}\nRELEASE_COMMIT={commit}\nRELEASE_TITLE={tag}: {title_what}\n"
-                f"RELEASE_ARCHIVE={archive}\n")
+                f"RELEASE_ARCHIVE={archive}\nRELEASE_PRERELEASE={'1' if prerelease else ''}\n")
     print(f"next release: {tag} at {commit}")
 
 
@@ -223,18 +248,28 @@ def render_notes(info, archive):
     tc = info["toolchain"]
     if info["kind"] == "deps":
         b = info["baseline"]
+        tree = info.get("sdl_build_tree") or {"library": "SDL2", **info["sdl2_build_tree"]}
+        link = info.get("sdl_link_check") or info["sdl2_link_check"]
         lines += [f"Dependency layer `{info['family']}` for RenPyLinter iOS.", "",
-                  f"- Baseline: `{b['branch']}` @ `{b['branch_commit']}` (upstream `{b['renpy_build_tag']}`)",
+                  f"- Baseline: `{b['branch']}` @ `{b['branch_commit']}` "
+                  f"(upstream `{b.get('renpy_build_tag') or b['renpy_build_commit']}`)",
                   f"- Recipe sha256: `{info['recipe_sha256']}`",
                   f"- Archives: {', '.join(sorted(info['archives']['ios-arm64']))}",
-                  f"- SDL2 compiled in the build tree for headers: {info['sdl2_build_tree']['version']}; "
-                  f"libSDL2 comes from `{info['sdl2_link_check']['release']}`"]
+                  f"- {tree['library']} compiled in the build tree for headers: {tree['version']}; "
+                  f"lib{tree['library']} comes from `{link['release']}`"]
     else:
-        lines += [f"Ren'Py {info['engine']} engine runtime for RenPyLinter iOS (Python {info['python']}).", "",
-                  f"- renpy-build: `{info['renpy_build']['tag']}` + branch commit `{info['renpy_build']['branch_commit']}`",
-                  f"- Ren'Py: `{info['renpy']['tag']}` @ `{info['renpy']['commit']}`",
+        rb, rp = info["renpy_build"], info["renpy"]
+        sdl = info.get("sdl") or {"library": "SDL2", **info["sdl2"]}
+        lines += [f"Ren'Py {info['engine']} engine runtime for RenPyLinter iOS (Python {info['python']}).", ""]
+        if info.get("prerelease"):
+            pre = info["prerelease"]
+            lines += [f"Built from Ren'Py {pre['channel']} `{pre['build']}` ({pre['page']}); "
+                      "Ren'Py has not released this version.", ""]
+        lines += [f"- renpy-build: `{rb.get('tag') or rb.get('ref')}` @ `{rb.get('tag_commit') or rb.get('base_commit')}` "
+                  f"+ branch commit `{rb['branch_commit']}`",
+                  f"- Ren'Py: `{rp.get('version') or rp['tag']}` @ `{rp['commit']}`",
                   f"- Dependency layer: `{info['deps']['release']}` (`{info['deps']['sha256']}`)",
-                  f"- SDL2: `{info['sdl2']['release']}`"]
+                  f"- {sdl['library']}: `{sdl['release']}`"]
     lines += [f"- Targets: device arm64 and simulator arm64, minimum iOS {tc['minimum_ios']}",
               f"- Xcode {tc['xcode']} ({tc['xcode_build']}), SDKs {tc['sdks']}",
               f"- Tooling commit: `{info['tooling_commit']}`",
@@ -253,7 +288,8 @@ def release_publish(args):
     subprocess.run(["gh", "api", "--method", "POST", f"repos/{env('GH_REPO')}/git/refs",
                     "-f", f"ref=refs/tags/{tag}", "-f", f"sha={commit}"], check=True)
     archive = Path(env("RELEASE_ARCHIVE"))
-    subprocess.run(["gh", "release", "create", tag, "--verify-tag", "--target", commit,
+    prerelease = ["--prerelease"] if env("RELEASE_PRERELEASE") else []
+    subprocess.run(["gh", "release", "create", tag, "--verify-tag", "--target", commit, *prerelease,
                     "--title", env("RELEASE_TITLE"),
                     "--notes-file", "notes.md", str(archive), str(archive) + ".sha256",
                     str(DIST / "build-info.json"), str(DIST / "SHA256SUMS")], check=True)
@@ -266,6 +302,7 @@ def main():
     ap.add_argument("--name")
     args = ap.parse_args()
     {
+        "base-ref": base_ref,
         "deps-config": deps_config, "deps-inputs": deps_inputs, "deps-build": deps_build,
         "engine-config": engine_config, "engine-inputs": engine_inputs, "engine-build": engine_build,
         "release-prepare": release_prepare, "release-publish": release_publish,
