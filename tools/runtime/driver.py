@@ -971,13 +971,13 @@ def engine(args):
 
     licenses = out / "LICENSES"
     bundle.copy_tree(deps_dir / "LICENSES", licenses)
-    python_src = next((src / "tmp" / "build").glob(f"python{version_cfg['python']}.ios-arm64-py*"))
+    python_src = arch_build_dir(src, f"python{version_cfg['python']}", version_cfg["python"])
     python_license = next(python_src.glob("Python-*/LICENSE"))
     shutil.copy2(python_license, licenses / "python-LICENSE")
     # The Ren'Py repository has no license file; the official SDK ships it
     # (nightlies: the Ren'Py source it is made from, see check_sdk).
     shutil.copy2(renpy_license, licenses / "renpy-LICENSE.txt")
-    pyobjus = src / "tmp" / "build" / f"pyobjus.ios-arm64-py{version_cfg['python']}" / "pyobjus" / "LICENSE"
+    pyobjus = arch_build_dir(src, "pyobjus", version_cfg["python"], required=False) / "pyobjus" / "LICENSE"
     if pyobjus.exists():
         shutil.copy2(pyobjus, licenses / "pyobjus-LICENSE")
 
@@ -1014,6 +1014,18 @@ def engine(args):
         "build_seconds": int(time.time() - started),
     }
     finish(out, info, args.trial)
+
+
+def arch_build_dir(src, module, python, required=True):
+    """tmp/build/<module>.ios-arm64[-py<N>]: 8.6 dropped the Python suffix."""
+
+    for name in (f"{module}.ios-arm64-py{python}", f"{module}.ios-arm64"):
+        path = src / "tmp" / "build" / name
+        if path.is_dir():
+            return path
+    if required:
+        raise SystemExit(f"no build directory for {module} (ios-arm64)")
+    return src / "tmp" / "build" / f"{module}.ios-arm64"
 
 
 def site_packages(path):
