@@ -19,8 +19,8 @@
   },
   "deps": {
     "family": "legacy",
-    "release": null,
-    "sha256": null
+    "release": "deps-legacy-r1",
+    "sha256": "3b541a1e994735fedac20fed908a54c19dae1757ef064f4ce78ce18a8fa2535d"
   },
   "sdl2": {
     "release": "sdl2-ios-6-1",
