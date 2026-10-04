@@ -39,5 +39,10 @@
     "PYTHONMALLOC",
     "PYTHONDEVMODE",
     "-X dev"
-  ]
+  ],
+  "upstream_renios": {
+    "url": "https://www.renpy.org/dl/8.3.7/renpy-8.3.7-renios.zip",
+    "sha256": "5b36af73640f2cb9ec68b5c2d90fc34ab2ac6832af45fd97c4c852e316ac779d",
+    "note": "Upstream's official iOS prebuilt archives; baseline for the system import gate only."
+  }
 }
