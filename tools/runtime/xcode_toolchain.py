@@ -5,9 +5,10 @@ tarballs. RenPyLinter builds on a macOS runner instead, so after upstream's
 ``build_environment`` has filled in its generic variables, this module replaces
 the compiler, archiver and SDK settings with the selected Xcode's.
 
-Only toolchain variables are touched. Task recipes, configure arguments and
-optimisation flags stay exactly as upstream wrote them, apart from the
-deployment target, which RenPyLinter fixes at iOS 15.6.
+Only toolchain variables are touched. Task recipes and configure arguments
+stay exactly as upstream wrote them, apart from the deployment target, which
+RenPyLinter fixes at iOS 15.6, and the optimisation level, which RenPyLinter
+fixes at -Os for every version (see _set_optimization).
 """
 
 import os
@@ -18,6 +19,11 @@ from functools import lru_cache
 from pathlib import Path
 
 MINIMUM_IOS = "15.6"
+
+# Every object and link is optimised for size, whatever upstream chose.
+OPTIMIZATION = "-Os"
+_OPTIMIZATION_FLAG = re.compile(r"(?<!\S)-O(?:[0-3sz]|fast)?(?!\S)")
+_CMAKE_BUILD_TYPE = re.compile(r"-DCMAKE_BUILD_TYPE=\S+")
 
 # Upstream tasks copy the build machine's /usr/share/misc/config.sub (Ubuntu
 # autotools-dev 20220109.1). That exact file is vendored here; engine branches
@@ -113,6 +119,31 @@ def _set_tools(c, sdk, target_args):
         c.environ.pop(name, None)
 
 
+def _set_optimization(c):
+    """Replace upstream's optimisation level with OPTIMIZATION.
+
+    Upstream puts -O3 in CFLAGS/LDFLAGS (7.8, 8.1+) or only in CC/CXX (7.5,
+    8.0), which _set_tools replaces, so those versions would otherwise build
+    without any optimisation. CXXFLAGS is always set too: autotools projects
+    fall back to their own "-g -O2" when it is unset.
+
+    CMake's Release build type appends -O3 after CFLAGS, so CMake projects
+    are built as MinSizeRel, which appends "-Os -DNDEBUG" instead (NDEBUG as
+    in Release). Projects that put their own level before the user flags,
+    such as CPython's OPT, are overridden because the last -O wins. FFmpeg
+    appends its own -O3 after --extra-cflags; its archives only serve the
+    link gates (the application links the global FFmpeg layer).
+    """
+
+    for name in ("CFLAGS", "CXXFLAGS", "LDFLAGS"):
+        rest = _OPTIMIZATION_FLAG.sub("", c.environ.get(name, "")).strip()
+        c.environ[name] = f"{OPTIMIZATION} {rest}".rstrip()
+
+    for name, value in list(c.variables.items()):
+        if "-DCMAKE_BUILD_TYPE=" in value:
+            c.var(name, _CMAKE_BUILD_TYPE.sub("-DCMAKE_BUILD_TYPE=MinSizeRel", value), expand=False)
+
+
 def _add_cmake_args(c, extra):
     """Append to the variable holding upstream's CMake arguments.
 
@@ -132,6 +163,8 @@ def apply(c):
 
     # Deterministic archive members (no timestamps/uid in ar headers).
     c.env("ZERO_AR_DATE", "1")
+
+    _set_optimization(c)
 
     for name in ("SDKROOT", "MACOSX_DEPLOYMENT_TARGET", "IPHONEOS_DEPLOYMENT_TARGET"):
         c.environ.pop(name, None)

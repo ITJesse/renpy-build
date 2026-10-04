@@ -100,6 +100,12 @@ keeps upstream's toolchain shape (`ccache clang -fuse-ld=lld
 SDKs, a `-target ...ios15.6` triple instead of upstream's 13.0, and the SDK
 tarball step replaced by a link to Xcode's SDK.
 
+Every version is optimised for size: `xcode_toolchain.py` replaces upstream's
+`-O3` (in `CFLAGS`/`LDFLAGS`, or in `CC`/`CXX` for 7.5 and 8.0) with `-Os` in
+`CFLAGS`, `CXXFLAGS` and `LDFLAGS`, and builds CMake projects as `MinSizeRel`
+instead of `Release`, whose `-O3` would follow `CFLAGS`. FFmpeg keeps its own
+`-O3`; its archives only serve the link gates.
+
 The build host reproduces upstream's Ubuntu host where it matters:
 
 * pinned tools (`build-tools.txt`, `autotools.json`): CMake 3.28.3 (upstream's
