@@ -48,6 +48,22 @@ def exported_symbols(path):
     return sorted({l.strip() for l in out.splitlines() if l.strip() and not l.endswith(":")})
 
 
+def weak_only_symbols(path):
+    """Defined external symbols that every member defines weak.
+
+    These are the link-once copies of inline functions and implicit template
+    instantiations: each object that uses one emits its own, and an object
+    whose optimiser inlined every use emits none.
+    """
+
+    weak, strong = set(), set()
+    for line in run("nm", "-m", "-g", "-U", str(path)).splitlines():
+        m = re.match(r"^[0-9a-f]+ \([^)]*\) (.*) (\S+)$", line)
+        if m:
+            (weak if "weak" in m.group(1).split() else strong).add(m.group(2))
+    return weak - strong
+
+
 @lru_cache(maxsize=None)
 def section_sizes(path):
     """Sum of section sizes by class over all members: text, data, bss."""

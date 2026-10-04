@@ -380,6 +380,13 @@ def export_lines(target_dir):
     return lines
 
 
+def weak_export_lines(target_dir):
+    lines = []
+    for archive in sorted((target_dir / "lib").glob("*.a")):
+        lines += [f"{archive.name}\t{s}" for s in sorted(machos.weak_only_symbols(archive))]
+    return lines
+
+
 def sdl2_tree_info(src):
     task = (src / "tasks" / "sdl2.py").read_text()
     version = re.search(r'^version\s*=\s*"([^"]+)"', task, re.M).group(1)
@@ -497,10 +504,11 @@ def deps(args):
         for target in TARGETS:
             previous = (prev_dir / "exports" / f"{target}.txt").read_text().splitlines()
             current = (out / "exports" / f"{target}.txt").read_text().splitlines()
-            removed = gates.exports_diff(previous, current)
+            removed, dropped = gates.exports_diff(previous, current, weak_export_lines(prev_dir / target))
             if removed:
                 gates.fail(f"{target}: {len(removed)} exported symbols removed since previous release: {removed[:20]}")
             gate_report["exports"][target] = {"previous": args.previous_tag, "removed": 0,
+                                              "weak_dropped": len(dropped),
                                               "added": len(set(current) - set(previous))}
     else:
         gate_report["exports"] = {"previous": None, "note": "first release of this family"}

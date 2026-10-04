@@ -93,10 +93,18 @@ def link(target, *, force_load, archives, frameworks_dir, frameworks, libraries,
         return True
 
 
-def exports_diff(previous, current):
-    """Symbols (archive, name) present before and missing now."""
+def exports_diff(previous, current, previous_weak=()):
+    """Symbols (archive, name) present before and missing now.
 
-    return sorted(set(previous) - set(current))
+    Returns (removed, dropped): ``dropped`` are the missing symbols that the
+    previous release only defined weak (see machos.weak_only_symbols). No
+    client resolves those against the layer, since every object that uses
+    one carries its own copy, so only ``removed`` breaks compatibility.
+    """
+
+    missing = set(previous) - set(current)
+    dropped = missing & set(previous_weak)
+    return sorted(missing - dropped), sorted(dropped)
 
 
 def entry_points(archive, wanted):
