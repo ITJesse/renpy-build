@@ -105,7 +105,9 @@ def build(c: Context):
 
     c.var("objects", " ".join(objects))
 
-    c.run("{{ AR }} r librenpy.a {{ objects }} inittab.o")
+    # RenPyLinter: inittab.o is already in objects; naming it twice stores two
+    # members, which breaks -force_load with duplicate init_librenpy.
+    c.run("{{ AR }} r librenpy.a {{ objects }}")
     c.run("{{ RANLIB }} librenpy.a")
 
     c.copy("librenpy.a", "{{ install }}/lib/librenpy.a")
