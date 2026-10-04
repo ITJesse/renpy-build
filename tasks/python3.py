@@ -130,6 +130,8 @@ def patch_ios(c: Context):
 
     c.chdir("Python-{{ version }}")
     c.patch("Python-{{ version }}/ios-posixmodule.diff")
+    # RenPyLinter: one archive member per object (see the patch).
+    c.patch("renpylinter/python-3.9.10-libpython-unique-members.diff")
 
     c.run("cp {{patches}}/ios-python2/_scproxy.pyx Modules")
     c.chdir("Modules")
@@ -144,6 +146,11 @@ def build_ios(c: Context):
         # f.write("ac_cv_header_langinfo_h=no\n")
         f.write("ac_cv_func_getentropy=no\n")
         f.write("ac_cv_have_long_long_format=yes\n")
+        # RenPyLinter: configure finds dup3/pipe2 by linking against current
+        # SDKs, but they are not in iOS 15.6 (and CPython calls them without a
+        # run-time check). Upstream's older SDK did not have them.
+        f.write("ac_cv_func_dup3=no\n")
+        f.write("ac_cv_func_pipe2=no\n")
         f.write("ac_cv_func_clock_settime=no")
 
     c.run("""{{configure}} {{ cross_config }} --prefix="{{ install }}" --with-system-ffi --disable-toolbox-glue --enable-ipv6""")

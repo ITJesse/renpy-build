@@ -22,6 +22,13 @@ def gen_static3(c: Context):
     c.chdir("{{ renpy }}/module")
     c.env("RENPY_DEPS_INSTALL", "/usr::/usr/lib/x86_64-linux-gnu/")
     c.env("RENPY_STATIC", "1")
+
+    # RenPyLinter: setup.py probes the host for SDL2/FFmpeg/... development
+    # files (installed on upstream's Linux host). An iOS-only build uses
+    # setuplib's own iOS mode, which skips the probe and the desktop-only
+    # _renpytfd module.
+    if c.platform == "ios":
+        c.env("RENPY_IOS", "1")
     c.run("{{ hostpython }} setup.py generate")
 
 
@@ -98,7 +105,9 @@ def build(c: Context):
 
     c.var("objects", " ".join(objects))
 
-    c.run("{{ AR }} r librenpy.a {{ objects }} inittab.o")
+    # RenPyLinter: inittab.o is already in objects; naming it twice stores two
+    # members, which breaks -force_load with duplicate init_librenpy.
+    c.run("{{ AR }} r librenpy.a {{ objects }}")
     c.run("{{ RANLIB }} librenpy.a")
 
     c.copy("librenpy.a", "{{ install }}/lib/librenpy.a")
