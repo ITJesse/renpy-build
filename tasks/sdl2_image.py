@@ -23,7 +23,7 @@ def build(c: Context):
     if c.platform == "windows":
         c.env("ac_cv_lib_jpeg_jpeg_CreateDecompress", "yes")
 
-    c.run("""cp /usr/share/misc/config.sub config.sub""")
+    c.run("""cp {{ config_sub }} config.sub""")
 
     # c.run("""./autogen.sh""")
     c.run("autoreconf -f")
