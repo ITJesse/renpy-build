@@ -1,0 +1,18 @@
+--- a/Makefile.pre.in
++++ b/Makefile.pre.in
+@@ -638,9 +638,14 @@
+ 
+ 
+ # Build static library
++# A module object listed by several Setup lines (math/cmath share _math.o,
++# _socket lists timemodule.c, ...) appears several times in MODOBJS; archive
++# each object once, keeping the order, so the library can be force-loaded.
++rpl_uniq = $(if $1,$(firstword $1) $(call rpl_uniq,$(filter-out $(firstword $1),$1)))
++
+ $(LIBRARY): $(LIBRARY_OBJS)
+ 	-rm -f $@
+-	$(AR) $(ARFLAGS) $@ $(LIBRARY_OBJS)
++	$(AR) $(ARFLAGS) $@ $(call rpl_uniq,$(LIBRARY_OBJS))
+ 
+ libpython$(LDVERSION).so: $(LIBRARY_OBJS) $(DTRACE_OBJS)
+ 	if test $(INSTSONAME) != $(LDLIBRARY); then \

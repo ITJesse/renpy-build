@@ -1,0 +1,19 @@
+# RenPyLinter patch series for this engine branch.
+#
+# Format: <patch file> <where it is applied>
+#   root          applied with `patch -p1` to the renpy-build checkout by
+#                 tools/runtime (renpylinter/tooling) before any task runs
+#   task:<module> applied by tasks/<module>.py to the unpacked source
+#
+# Every file in this directory except this one must be listed.
+#
+# 8.0.3 (ancient family) first tries the legacy family dependency layer, as
+# the plan asks; dependency-layer fixes live on renpylinter/8.3.7.
+
+# Per-session Python heap in librenpython (plan 4.3 step 1 placement).
+librenpython-session-zone.diff root
+
+# Python 3.9 makesetup lists an object once per Setup line that names it
+# (_math.o, timemodule.o, ...), so libpython3.9.a held duplicate members and
+# could not be force-loaded. Archive each object once; objects unchanged.
+python-3.9.10-libpython-unique-members.diff task:python3

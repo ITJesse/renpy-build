@@ -1,0 +1,49 @@
+{
+  "engine": "8.0.3",
+  "renpy_build_tag": "renpy-8.0.3.22090809",
+  "renpy_build_commit": "08687209018fe4ec031620454957f98e877e4af6",
+  "renpy_tag": "8.0.3.22090809",
+  "renpy_commit": "23e313d5e0376c9a1b13ae6beb7861368f8acc5b",
+  "pygame_sdl2_tag": "renpy-8.0.3.22090809",
+  "pygame_sdl2_commit": "bed8099df753fa656a0723900694f2f8d235da00",
+  "python": "3.9.10",
+  "host_python": "3.8",
+  "renpy_sdk": {
+    "url": "https://www.renpy.org/dl/8.0.3/renpy-8.0.3-sdk.tar.bz2",
+    "sha256": "7e91576c943342791bf2aceb067bb97991c063831b387536973a01f842543f25"
+  },
+  "upstream_renios": {
+    "url": "https://www.renpy.org/dl/8.0.3/renpy-8.0.3-renios.zip",
+    "sha256": "f31b28adc35b23396a83d21912ffd5ca344197928212e0a9a1833a14953348dd",
+    "note": "Upstream's official iOS prebuilt archives; baseline for the system import gate only."
+  },
+  "deps": {
+    "family": "legacy",
+    "release": "deps-legacy-r1",
+    "sha256": "3b541a1e994735fedac20fed908a54c19dae1757ef064f4ce78ce18a8fa2535d",
+    "note": "ancient family: trying the legacy layer first (plan 3.3)"
+  },
+  "sdl2": {
+    "release": "sdl2-ios-6-1",
+    "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1"
+  },
+  "live2d_header": {
+    "sdk": "CubismSdkForNative-5-r.5",
+    "file": "Core/include/Live2DCubismCore.h",
+    "sha256": "6f1802780d1eb36ff39705e0764f9eeed9b41c313a13ac155270c6f4ad51d53f",
+    "secret": "LIVE2D_CUBISM_CORE_H",
+    "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
+  },
+  "patches_sha256": "98ce050c5c471f77d2ea6d677dafd671c40aae7a37ee6f350bb955c7c56e4c37",
+  "targets": [
+    "ios-arm64",
+    "ios-sim-arm64"
+  ],
+  "minimum_ios": "15.6",
+  "xcode": "26.6",
+  "unsupported_python_settings": [
+    "PYTHONMALLOC",
+    "PYTHONDEVMODE",
+    "-X dev"
+  ]
+}
