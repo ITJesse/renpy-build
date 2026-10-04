@@ -485,10 +485,12 @@ def python3(c: Context):
 
     # RenPyLinter: an iOS-only build never runs the desktop steam task that
     # generates steamapi.py; take the generated copy committed in steamapi/.
+    # This version only collects existing pyc files, so compile it too.
     steamapi = c.path("{{ pytmp }}/steam/steamapi.py")
     if not steamapi.exists():
         steamapi.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(c.path("{{ root }}/steamapi/steamapi.py"), steamapi)
+        c.run("{{ hostpython }} -m compileall -q {{ pytmp }}/steam")
 
     search = [
         c.path("{{ install }}/lib/{{ pythonver }}"),
