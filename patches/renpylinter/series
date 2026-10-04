@@ -18,8 +18,9 @@ libffi-aarch64-cfi.diff task:libffi
 # current Apple SDKs do; the block as in zlib 1.3.1.
 zlib-1.2.11-apple-fdopen.diff task:zlib
 
-# configure aborts on an arm64 Mac build machine ("Unexpected output of
-# 'arch' on OSX"); the host and the cross build both run it there.
+# The host Python's configure aborts on an arm64 Mac build machine
+# ("Unexpected output of 'arch' on OSX"). The cross build's configure has
+# that check removed by upstream's python2-cross-darwin.diff already.
 python-2.7.18-macos-arm64-build.diff task:hostpython2
 
 # pyobjus enum() passed unicode class names to type(), which needs bytes on
