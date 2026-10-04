@@ -103,8 +103,10 @@ tarball step replaced by a link to Xcode's SDK.
 Every version is optimised for size: `xcode_toolchain.py` replaces upstream's
 `-O3` (in `CFLAGS`/`LDFLAGS`, or in `CC`/`CXX` for 7.5 and 8.0) with `-Os` in
 `CFLAGS`, `CXXFLAGS` and `LDFLAGS`, and builds CMake projects as `MinSizeRel`
-instead of `Release`, whose `-O3` would follow `CFLAGS`. FFmpeg keeps its own
-`-O3`; its archives only serve the link gates.
+instead of `Release`, whose `-O3` would follow `CFLAGS`. Python 2.7's
+Makefile puts its `OPT` (`-O3`) after `CFLAGS`, so `-Os` is also passed in
+`EXTRA_CFLAGS`, which CPython appends last. FFmpeg keeps its own `-O3`; its
+archives only serve the link gates.
 Apple's clang, unlike upstream's, passes the last `-O` option on to the linker,
 and `ld64.lld` rejects `-Os`; the driver therefore puts a small `ld64.lld`
 wrapper on the task `PATH` that drops the levels lld cannot parse (lld's `-O`

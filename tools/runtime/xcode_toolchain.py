@@ -129,15 +129,20 @@ def _set_optimization(c):
 
     CMake's Release build type appends -O3 after CFLAGS, so CMake projects
     are built as MinSizeRel, which appends "-Os -DNDEBUG" instead (NDEBUG as
-    in Release). Projects that put their own level before the user flags,
-    such as CPython's OPT, are overridden because the last -O wins. FFmpeg
-    appends its own -O3 after --extra-cflags; its archives only serve the
-    link gates (the application links the global FFmpeg layer).
+    in Release). CPython's OPT (-O3) precedes CFLAGS in Python 3, but in
+    Python 2.7 it follows them (CFLAGS = BASECFLAGS @CFLAGS@ OPT EXTRA_CFLAGS),
+    so the level is also passed in EXTRA_CFLAGS, which both versions append
+    last and take from the environment. FFmpeg appends its own -O3 after
+    --extra-cflags; its archives only serve the link gates (the application
+    links the global FFmpeg layer).
     """
 
     for name in ("CFLAGS", "CXXFLAGS", "LDFLAGS"):
         rest = _OPTIMIZATION_FLAG.sub("", c.environ.get(name, "")).strip()
         c.environ[name] = f"{OPTIMIZATION} {rest}".rstrip()
+
+    rest = _OPTIMIZATION_FLAG.sub("", c.environ.get("EXTRA_CFLAGS", "")).strip()
+    c.environ["EXTRA_CFLAGS"] = f"{rest} {OPTIMIZATION}".lstrip()
 
     for name, value in list(c.variables.items()):
         if "-DCMAKE_BUILD_TYPE=" in value:
