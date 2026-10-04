@@ -572,8 +572,7 @@ def deps(args):
     for target in TARGETS:
         ours = machos.external_references(sorted((out / target / "lib").glob("*.a"))
                                           + sorted((out / "link-check" / target).glob("*.a")) + [sdl[target]])
-        gate_report["system_imports"][target] = gates.system_imports_vs_upstream(
-            ours, upstream_references(upstream, target), config["reviewed_system_imports"])
+        gate_report["system_imports"][target] = system_import_gate(ours, upstream, target, config)
 
     if args.previous:
         prev_dir = src / "tmp" / "rpl-inputs" / "previous"
@@ -771,12 +770,23 @@ def unpack_upstream_renios(zip_path, lock, work):
     return dest / "renios" / "prototype" / "prebuilt"
 
 
-def upstream_references(prebuilt, target):
+def upstream_references(prebuilt, target, fallbacks):
     archives = [p for p in sorted((prebuilt / ENGINE_FOLDER[target]).glob("*.a"))
                 if p.name not in ("libSDL2_test.a", "libSDL3_test.a")]
     if not archives:
         raise SystemExit(f"upstream renios has no {ENGINE_FOLDER[target]} archives")
-    return machos.external_references(archives)
+    return machos.external_references(archives, fallbacks=fallbacks)
+
+
+def system_import_gate(ours, upstream, target, config):
+    """The system import gate, reporting baseline archives read with llvm-nm."""
+
+    fallbacks = []
+    report = gates.system_imports_vs_upstream(ours, upstream_references(upstream, target, fallbacks),
+                                              config["reviewed_system_imports"])
+    if fallbacks:
+        report["upstream_read_with_llvm_nm"] = fallbacks
+    return report
 
 
 def compile_python(hostpython, items, python_major, mtime):
@@ -905,8 +915,7 @@ def engine(args):
     for target in TARGETS:
         ours = machos.external_references(sorted((out / "lib" / ENGINE_FOLDER[target]).glob("*.a"))
                                           + sorted((deps_dir / "link-check" / target).glob("*.a")) + [sdl[target]])
-        gate_report["system_imports"][target] = gates.system_imports_vs_upstream(
-            ours, upstream_references(upstream, target), config["reviewed_system_imports"])
+        gate_report["system_imports"][target] = system_import_gate(ours, upstream, target, config)
 
     # Python standard library (pythonlib task output).
     stdlib = src / "renpy" / "lib" / pythonver

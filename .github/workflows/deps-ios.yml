@@ -75,7 +75,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Install build tools
-        run: brew install pkg-config ccache lld xz openssl@3 libffi
+        run: brew install pkg-config ccache lld llvm xz openssl@3 libffi
 
       - uses: actions/cache@v4
         with:

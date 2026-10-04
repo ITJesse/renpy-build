@@ -1,8 +1,10 @@
 """Mach-O static archive inspection with Xcode's tools."""
 
+import os
 import re
 import subprocess
 from functools import lru_cache
+from pathlib import Path
 
 # LC_BUILD_VERSION platform numbers (mach-o/loader.h)
 PLATFORMS = {1: "macos", 2: "ios", 7: "iossimulator"}
@@ -95,7 +97,39 @@ def call_sequence(path, symbol):
     return re.findall(r"ARM64_RELOC_BRANCH26\s+(\S+)", out)
 
 
-def external_references(paths, arch="arm64"):
+@lru_cache(maxsize=None)
+def llvm_nm():
+    """Homebrew's llvm-nm: (path, version line)."""
+
+    path = os.environ.get("RPL_LLVM_NM") or str(
+        Path(subprocess.check_output(["brew", "--prefix", "llvm"], text=True).strip()) / "bin" / "llvm-nm")
+    version = subprocess.check_output([path, "--version"], text=True)
+    return path, next(l.strip() for l in version.splitlines() if "version" in l)
+
+
+def symbol_table(path, arch, fallbacks=None):
+    """``nm -m`` output for one archive.
+
+    Upstream's 8.6 nightlies contain LLVM bitcode (assimp is built with LTO
+    by a newer LLVM than Xcode's), which Xcode's nm cannot read. Those
+    archives are read with llvm-nm, whose -m output has the same form
+    (bitcode definitions show as "(LTO,CODE)" and the like), and are listed
+    in ``fallbacks``.
+    """
+
+    try:
+        return run("nm", "-m", "-arch", arch, str(path))
+    except subprocess.CalledProcessError as e:
+        if "Unknown attribute kind" not in e.stderr and "Producer:" not in e.stderr:
+            raise
+    nm, version = llvm_nm()
+    out = subprocess.run([nm, "-m", f"--arch={arch}", str(path)], check=True, capture_output=True, text=True).stdout
+    if fallbacks is not None:
+        fallbacks.append({"archive": Path(path).name, "reader": version})
+    return out
+
+
+def external_references(paths, arch="arm64", fallbacks=None):
     """Undefined external symbols of ``paths`` that none of them defines.
 
     These are what system libraries must provide. Weak references are kept:
@@ -106,7 +140,7 @@ def external_references(paths, arch="arm64"):
 
     defined, referenced = set(), set()
     for path in paths:
-        for line in run("nm", "-m", "-arch", arch, str(path)).splitlines():
+        for line in symbol_table(path, arch, fallbacks).splitlines():
             if " non-external " in line:
                 continue
             m = re.search(r"\((undefined|common|[^)]*,[^)]*)\).* external (?:\[[^\]]*\] )?(\S+)", line)
