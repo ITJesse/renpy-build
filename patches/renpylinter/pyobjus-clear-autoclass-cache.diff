@@ -1,27 +1,38 @@
 --- a/pyobjus/pyobjus.pyx
 +++ b/pyobjus/pyobjus.pyx
-@@ -75,8 +75,24 @@
- delegate_register = dict()
- factory = None
- dev_platform = PLATFORM
+@@ -706,7 +706,35 @@
+         if oclass_register[cls_name].get('class') is not None:
+             return oclass_register[cls_name].get('class').__copy_properties__
+     return None
 +
 +
 +def clear_autoclass_cache():
 +    """
-+    Forgets every class autoclass() built. autoclass() instantiates the
-+    class it returns (call_constructor) and resolve_methods() stores that
-+    instance in each ObjcMethod.p_class of the class, so the Objective-C
-+    instance lives as long as the class; the class lives in the module
-+    statics above, which Py_Finalize never releases. Hosts that run several
-+    interpreter sessions in one process (RenPyLinter) call this before
-+    finalizing and then collect garbage, so ObjcClassInstance.__dealloc__
-+    sends `release`. Later autoclass() calls rebuild the classes.
++    Forgets every class autoclass() built and lets their Objective-C
++    instances go. autoclass() instantiates the class it returns
++    (call_constructor) and resolve_methods() stores that instance in each
++    ObjcMethod.p_class of the class, so the instance lives as long as the
++    class, and the class lives in the module statics above, which
++    Py_Finalize never releases. Hosts that run several interpreter sessions
++    in one process (RenPyLinter) call this before finalizing: the p_class
++    references are dropped so an instance is kept alive only by whoever
++    still holds it, and the registry is emptied so the classes can be
++    collected. Later autoclass() calls rebuild the classes.
 +    """
  
++    cdef ObjcMethod om
++
++    for entry in list(oclass_register.values()):
++        for cls in list(entry.values()):
++            for value in list(cls.__dict__.values()):
++                if isinstance(value, ObjcMethod):
++                    om = value
++                    om.p_class = None
++
 +    oclass_register.clear()
 +    omethod_partial_register.clear()
- 
 +
- cdef pr(void *pointer):
-     # convert a void* to a 0x... value
-     return '0x%x' % <unsigned long>pointer
++
+ def autoclass(py_cls_name, **kwargs):
+     cdef bytes cls_name
+     if isinstance(py_cls_name, bytes):
