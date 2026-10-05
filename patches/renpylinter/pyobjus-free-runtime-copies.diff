@@ -1,0 +1,52 @@
+diff --git a/pyobjus/pyobjus.pyx b/pyobjus/pyobjus.pyx
+index e584cc7..ece8099 100644
+--- a/pyobjus/pyobjus.pyx
++++ b/pyobjus/pyobjus.pyx
+@@ -522,14 +522,17 @@ cdef class_get_methods(Class cls, static=False, main_cls_name=None):
+     cdef unsigned int index, num_methods
+     cdef dict methods = {}
+     cdef Method* class_methods = class_copyMethodList(cls, &num_methods)
+-    main_cls_name = main_cls_name or class_getName(cls)
+-    for i in xrange(num_methods):
+-        py_name, converted_method = objc_method_to_py(class_methods[i], main_cls_name, static)
+-        if py_name not in tmp_properties_keys:
+-            methods[py_name] = converted_method
+-        else:
+-            methods['__getter__' + py_name] = converted_method
+-    free(class_methods)
++    # RenPyLinter: free the list on the error path too.
++    try:
++        main_cls_name = main_cls_name or class_getName(cls)
++        for i in xrange(num_methods):
++            py_name, converted_method = objc_method_to_py(class_methods[i], main_cls_name, static)
++            if py_name not in tmp_properties_keys:
++                methods[py_name] = converted_method
++            else:
++                methods['__getter__' + py_name] = converted_method
++    finally:
++        free(class_methods)
+     return methods
+ 
+ cdef class_get_static_methods(Class cls, main_cls_name=None):
+@@ -632,11 +635,16 @@ cdef get_class_properties(Class cls):
+     cdef Ivar ivar
+     cdef void **out_val = NULL
+ 
+-    for i in range(num_props):
+-        prop_attrs = property_getAttributes(properties[i])
+-        name = property_getName(properties[i])
+-        ivar = class_getInstanceVariable(cls, <char*>name)
+-        props_dict[name.decode("utf8")] = ObjcProperty(<unsigned long long>&properties[i], prop_attrs, <unsigned long long>&ivar, name)
++    # RenPyLinter: class_copyPropertyList() returns a malloc'd array the
++    # caller must free; ObjcProperty copies the objc_property_t it is given.
++    try:
++        for i in range(num_props):
++            prop_attrs = property_getAttributes(properties[i])
++            name = property_getName(properties[i])
++            ivar = class_getInstanceVariable(cls, <char*>name)
++            props_dict[name.decode("utf8")] = ObjcProperty(<unsigned long long>&properties[i], prop_attrs, <unsigned long long>&ivar, name)
++    finally:
++        free(properties)
+     return props_dict
+ 
+ def check_copy_properties(cls_name):

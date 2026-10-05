@@ -22,3 +22,10 @@ zlib-1.2.11-apple-fdopen.diff task:zlib
 # (_math.o, timemodule.o, ...), so libpython3.9.a held duplicate members and
 # could not be force-loaded. Archive each object once; objects unchanged.
 python-3.9.10-libpython-unique-members.diff task:python3
+
+# The Objective-C runtime's copy functions return memory the caller frees
+# (objc/runtime.h); pyobjus never freed class_copyPropertyList's array
+# (once per autoclass()). This pyobjus commit reads method_getTypeEncoding,
+# so it has no method_copy*Type leak.
+# Also frees class_copyMethodList's array when a conversion raises.
+pyobjus-free-runtime-copies.diff task:pyobjus
