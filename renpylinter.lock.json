@@ -28,7 +28,7 @@
     "secret": "LIVE2D_CUBISM_CORE_H",
     "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
   },
-  "patches_sha256": "11445bfafd1c4b5a90d70cc9f1fa89a987abc366ce1d290ce79e748cf5eda001",
+  "patches_sha256": "a20d5f5d46ffbd88c107fe6a16d58bde844a2e4d411621390e85171892769f6b",
   "targets": [
     "ios-arm64",
     "ios-sim-arm64"
