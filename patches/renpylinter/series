@@ -32,3 +32,5 @@ pyobjus-free-runtime-copies.diff task:pyobjus
 # branch of convert_cy_ret_to_py copied nothing (ctypes .contents aliased
 # the buffer); it now returns a from_buffer_copy so the buffer can go.
 pyobjus-free-call-result-buffer.diff task:pyobjus
+# Same fix against pyobjus 9c0ca61, which this branch checks out for mac arm64 only.
+pyobjus-free-call-result-buffer-9c0ca61.diff task:pyobjus
