@@ -19,3 +19,11 @@ librenpython-session-zone.diff root
 # (2.15 MiB in one AfterClass session), and class_copyPropertyList's array.
 # Also frees class_copyMethodList's array when a conversion raises.
 pyobjus-free-runtime-copies.diff task:pyobjus
+
+# pyobjus ObjcMethod.__call__ malloc's the ffi return-value buffer
+# (res_ptr) for every Objective-C call and never freed it; it also leaked
+# f_args and the argument buffers on the `return self.p_class` shortcut
+# and on every exception. Free them all in a finally. The struct return
+# branch of convert_cy_ret_to_py copied nothing (ctypes .contents aliased
+# the buffer); it now returns a from_buffer_copy so the buffer can go.
+pyobjus-free-call-result-buffer.diff task:pyobjus
