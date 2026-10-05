@@ -20,3 +20,10 @@ python-2.7.18-macos-arm64-build.diff task:hostpython2
 # timemodule.o, pwdmodule.o), so libpython2.7.a held duplicate members and
 # could not be force-loaded. Archive each object once; objects unchanged.
 python-2.7.18-libpython-unique-members.diff task:python2
+
+# The Objective-C runtime's copy functions return memory the caller frees
+# (objc/runtime.h); pyobjus never freed class_copyPropertyList's array
+# (once per autoclass()). This pyobjus commit reads method_getTypeEncoding,
+# so it has no method_copy*Type leak.
+# Also frees class_copyMethodList's array when a conversion raises.
+pyobjus-free-runtime-copies.diff task:pyobjus
