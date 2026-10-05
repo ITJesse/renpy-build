@@ -19,6 +19,9 @@ def unpack(c):
     c.chdir("pyobjus")
     c.run("git checkout ea4ef7c96dcc83d5f1f18d4b15f3709f32c47a24")
 
+    # RenPyLinter: free what the Objective-C runtime's copy functions return.
+    c.patch("renpylinter/pyobjus-free-runtime-copies.diff")
+
 
 @task(kind="host-python")
 def host_unpack(c):
