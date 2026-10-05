@@ -1,0 +1,45 @@
+--- a/renpy/renpy/text/ftfont.pyx	2026-10-06 02:32:09
++++ b/renpy/renpy/text/ftfont.pyx	2026-10-06 02:32:09
+@@ -68,6 +68,23 @@
+     error = FT_Init_FreeType(&library)
+     if error:
+         raise FreetypeError(error)
++
++
++def quit():
++    """
++    Destroys the FreeType library that init() created, and with it every
++    face that is still open. Upstream never calls FT_Done_FreeType; this
++    exists for hosts that run several Ren'Py sessions in one process
++    (RenPyLinter), where the module's statics are reset between sessions
++    and the library would otherwise stay allocated once per session.
++    After this, the __dealloc__ methods below skip their FreeType calls.
++    """
++
++    global library
++
++    if library != NULL:
++        FT_Done_FreeType(library)
++        library = NULL
+ 
+ cdef bint is_vs(unsigned int char):
+     if 0xfe00 <= char <= 0xfe0f: # VS1-16
+@@ -276,11 +293,14 @@
+         init_gsubtable(&self.gsubtable)
+ 
+     def __dealloc__(self):
+-        for i from 0 <= i < 256:
+-            FT_Bitmap_Done(library, &(self.cache[i].bitmap))
++        # After quit() the library, and the allocator the bitmaps and the
++        # stroker came from, are gone.
++        if library != NULL:
++            for i from 0 <= i < 256:
++                FT_Bitmap_Done(library, &(self.cache[i].bitmap))
+ 
+-        if self.stroker != NULL:
+-            FT_Stroker_Done(self.stroker)
++            if self.stroker != NULL:
++                FT_Stroker_Done(self.stroker)
+ 
+         free_gsubtable(&self.gsubtable)
+ 
