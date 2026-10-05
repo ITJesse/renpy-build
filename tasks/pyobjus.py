@@ -22,6 +22,9 @@ def unpack(c: Context):
     c.run("git checkout {{ commit }}")
     c.patch("pyobjus-ffi-h.diff")
 
+    # RenPyLinter: free what the Objective-C runtime's copy functions return.
+    c.patch("renpylinter/pyobjus-free-runtime-copies.diff")
+
 
 @task(kind="host")
 def host_unpack(c: Context):
