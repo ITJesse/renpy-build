@@ -35,6 +35,9 @@ def unpack(c: Context):
     else:
         c.patch("renpylinter/pyobjus-free-call-result-buffer.diff")
 
+    # RenPyLinter: let the host drop the autoclass registry before finalizing.
+    c.patch("renpylinter/pyobjus-clear-autoclass-cache.diff")
+
 
 
 @task(kind="host-python")
