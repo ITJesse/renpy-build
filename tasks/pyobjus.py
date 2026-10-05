@@ -29,6 +29,9 @@ def unpack(c: Context):
     # RenPyLinter: let the host drop the autoclass registry before finalizing.
     c.patch("renpylinter/pyobjus-clear-autoclass-cache.diff")
 
+    # RenPyLinter: do not retain the +1 references alloc / new / copy / init return.
+    c.patch("renpylinter/pyobjus-owned-returns.diff")
+
 
 @task(kind="host-python")
 def host_unpack(c: Context):
