@@ -13,3 +13,10 @@ librenpython-session-zone.diff root
 # libffi 3.4.5 aarch64 CFI order; Apple clang errors with "invalid CFI
 # advance_loc expression". Upstream libffi 8308bed (#857), released in 3.4.7.
 libffi-aarch64-cfi.diff task:libffi
+
+# The Objective-C runtime's copy functions return memory the caller frees
+# (objc/runtime.h); pyobjus kept none of it: method_copyReturnType and
+# method_copyArgumentType strings for every method autoclass() reflects
+# (2.15 MiB in one AfterClass session), and class_copyPropertyList's array.
+# Also frees class_copyMethodList's array when a conversion raises.
+pyobjus-free-runtime-copies.diff task:pyobjus

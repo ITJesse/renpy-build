@@ -1,0 +1,101 @@
+diff --git a/pyobjus/pyobjus.pyx b/pyobjus/pyobjus.pyx
+index b9b5874..cb3ac80 100644
+--- a/pyobjus/pyobjus.pyx
++++ b/pyobjus/pyobjus.pyx
+@@ -516,6 +516,26 @@ cdef class ObjcMethod(object):
+ registers = []
+ tmp_properties_keys = []
+ 
++cdef tuple objc_method_copy_types(Method method):
++    # RenPyLinter: method_copyReturnType() and method_copyArgumentType()
++    # return malloc'd strings the caller must free (objc/runtime.h); copy
++    # each into bytes, then free it.
++    cdef unsigned int i, method_args_len = method_getNumberOfArguments(method)
++    cdef char* c_type = method_copyReturnType(method)
++    cdef bytes method_return_type
++    cdef list method_args_types = []
++    try:
++        method_return_type = c_type
++    finally:
++        free(c_type)
++    for i in range(method_args_len):
++        c_type = method_copyArgumentType(method, i)
++        try:
++            method_args_types.append(<bytes>c_type)
++        finally:
++            free(c_type)
++    return method_return_type, method_args_types
++
+ cdef objc_method_to_py(Method method, main_cls_name, static=True):
+     ''' Function for making equvivalent Python object for some Method C type
+ 
+@@ -529,9 +549,7 @@ cdef objc_method_to_py(Method method, main_cls_name, static=True):
+     '''
+ 
+     cdef char* method_name = <char*>sel_getName(method_getName(method))
+-    cdef unsigned int method_args_len = method_getNumberOfArguments(method)
+-    cdef char* method_return_type = method_copyReturnType(method)
+-    cdef list method_args_types = [method_copyArgumentType(method, i) for i in range(method_args_len)]
++    method_return_type, method_args_types = objc_method_copy_types(method)
+ 
+     cdef basestring py_name = (<bytes>method_name).replace(b":", b"_").decode("utf-8")
+ 
+@@ -541,14 +559,17 @@ cdef class_get_methods(Class cls, static=False, main_cls_name=None):
+     cdef unsigned int index, num_methods
+     cdef dict methods = {}
+     cdef Method* class_methods = class_copyMethodList(cls, &num_methods)
+-    main_cls_name = main_cls_name or class_getName(cls)
+-    for i in xrange(num_methods):
+-        py_name, converted_method = objc_method_to_py(class_methods[i], main_cls_name, static)
+-        if py_name not in tmp_properties_keys:
+-            methods[py_name] = converted_method
+-        else:
+-            methods['__getter__' + py_name] = converted_method
+-    free(class_methods)
++    # RenPyLinter: free the list on the error path too.
++    try:
++        main_cls_name = main_cls_name or class_getName(cls)
++        for i in xrange(num_methods):
++            py_name, converted_method = objc_method_to_py(class_methods[i], main_cls_name, static)
++            if py_name not in tmp_properties_keys:
++                methods[py_name] = converted_method
++            else:
++                methods['__getter__' + py_name] = converted_method
++    finally:
++        free(class_methods)
+     return methods
+ 
+ cdef class_get_static_methods(Class cls, main_cls_name=None):
+@@ -608,9 +629,7 @@ cdef get_class_method(Class cls, char *name):
+         ObjcMethod instance
+     '''
+     cdef Method m_cls = class_getClassMethod(cls, sel_registerName(name))
+-    cdef unsigned int method_args_len = method_getNumberOfArguments(m_cls)
+-    cdef char* method_return_type = method_copyReturnType(m_cls)
+-    cdef list method_args_types = [method_copyArgumentType(m_cls, i) for i in range(method_args_len)]
++    method_return_type, method_args_types = objc_method_copy_types(m_cls)
+ 
+     return ObjcMethod(name, method_args_types, method_return_type, static=True, \
+         main_cls_name=class_getName(cls))
+@@ -655,11 +674,16 @@ cdef get_class_properties(Class cls):
+     cdef Ivar ivar
+     cdef void **out_val = NULL
+ 
+-    for i in range(num_props):
+-        prop_attrs = property_getAttributes(properties[i])
+-        name = property_getName(properties[i])
+-        ivar = class_getInstanceVariable(cls, <char*>name)
+-        props_dict[name.decode("utf8")] = ObjcProperty(<unsigned long long>&properties[i], prop_attrs, <unsigned long long>&ivar, name)
++    # RenPyLinter: class_copyPropertyList() returns a malloc'd array the
++    # caller must free; ObjcProperty copies the objc_property_t it is given.
++    try:
++        for i in range(num_props):
++            prop_attrs = property_getAttributes(properties[i])
++            name = property_getName(properties[i])
++            ivar = class_getInstanceVariable(cls, <char*>name)
++            props_dict[name.decode("utf8")] = ObjcProperty(<unsigned long long>&properties[i], prop_attrs, <unsigned long long>&ivar, name)
++    finally:
++        free(properties)
+     return props_dict
+ 
+ def check_copy_properties(cls_name):
