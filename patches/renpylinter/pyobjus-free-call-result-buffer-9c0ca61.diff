@@ -1,8 +1,8 @@
 diff --git a/pyobjus/pyobjus.pyx b/pyobjus/pyobjus.pyx
-index ece8099..065d83b 100644
+index 98464b7..3401d50 100644
 --- a/pyobjus/pyobjus.pyx
 +++ b/pyobjus/pyobjus.pyx
-@@ -339,8 +339,13 @@ cdef class ObjcMethod(object):
+@@ -349,8 +349,13 @@ cdef class ObjcMethod(object):
          dprint('--> return def is', self.signature_return)
          dprint('--> args def is', self.signature_args)
  
@@ -17,7 +17,7 @@ index ece8099..065d83b 100644
          cdef void **f_args
          cdef int index
          cdef size_t size
-@@ -359,143 +364,147 @@ cdef class ObjcMethod(object):
+@@ -370,143 +375,147 @@ cdef class ObjcMethod(object):
              free(f_args)
              raise MemoryError('Unable to allocate f_args')
  
@@ -166,8 +166,8 @@ index ece8099..065d83b 100644
 +                    if self.signature_return[0].startswith((b'{', b'(')) and size_ret > 16:
 +                        stret = True
 +
-+                    if stret:
-+                        ffi_call(&self.f_cif, <void(*)()><id(*)(id, SEL)>objc_msgSend_stret, res_ptr, f_args)
++                    if stret and MACOS_HAVE_OBJMSGSEND_STRET:
++                        ffi_call(&self.f_cif, <void(*)()><id(*)(id, SEL)>objc_msgSend_stret__safe, res_ptr, f_args)
 +                        fun_name = "objc_msgSend_stret"
 +                        del_res_ptr = False
 +                    else:
@@ -209,8 +209,8 @@ index ece8099..065d83b 100644
 -                if self.signature_return[0].startswith((b'{', b'(')) and size_ret > 16:
 -                    stret = True
 -
--                if stret:
--                    ffi_call(&self.f_cif, <void(*)()><id(*)(id, SEL)>objc_msgSend_stret, res_ptr, f_args)
+-                if stret and MACOS_HAVE_OBJMSGSEND_STRET:
+-                    ffi_call(&self.f_cif, <void(*)()><id(*)(id, SEL)>objc_msgSend_stret__safe, res_ptr, f_args)
 -                    fun_name = "objc_msgSend_stret"
 -                    del_res_ptr = False
 -                else:
