@@ -49,3 +49,20 @@ pyobjus-free-runtime-copies.diff task:pyobjus
 pyobjus-free-call-result-buffer.diff task:pyobjus
 # Same fix against pyobjus 9c0ca61, which this branch checks out for mac arm64 only.
 pyobjus-free-call-result-buffer-9c0ca61.diff task:pyobjus
+
+# Ren'Py's ftfont / hbfont create a FreeType library in init() and never
+# call FT_Done_FreeType. The handle is a module static that RenPyLinter
+# zeroes between its in-process sessions, so one FT_Library plus its
+# modules stayed on the default heap per session. Adds quit(), which the
+# host's main.py calls at shutdown, and makes the __dealloc__ FreeType
+# calls no-ops once the library is gone.
+renpy-freetype-quit.diff root
+
+# pyobjus' autoclass() instantiates the class it builds and parks that
+# instance in every ObjcMethod.p_class, while the class sits in the
+# module-static oclass_register that Py_Finalize never releases, so the
+# Objective-C instance (SwiftBridge, UIDevice, AVSpeechSynthesizer, the
+# last NSString a call returned, ...) was never released. Adds
+# clear_autoclass_cache() for the host's main.py to call before
+# finalization.
+pyobjus-clear-autoclass-cache.diff task:pyobjus

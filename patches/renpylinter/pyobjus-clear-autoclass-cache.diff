@@ -1,0 +1,27 @@
+--- a/pyobjus/pyobjus.pyx
++++ b/pyobjus/pyobjus.pyx
+@@ -75,8 +75,24 @@
+ delegate_register = dict()
+ factory = None
+ dev_platform = PLATFORM
++
++
++def clear_autoclass_cache():
++    """
++    Forgets every class autoclass() built. autoclass() instantiates the
++    class it returns (call_constructor) and resolve_methods() stores that
++    instance in each ObjcMethod.p_class of the class, so the Objective-C
++    instance lives as long as the class; the class lives in the module
++    statics above, which Py_Finalize never releases. Hosts that run several
++    interpreter sessions in one process (RenPyLinter) call this before
++    finalizing and then collect garbage, so ObjcClassInstance.__dealloc__
++    sends `release`. Later autoclass() calls rebuild the classes.
++    """
+ 
++    oclass_register.clear()
++    omethod_partial_register.clear()
+ 
++
+ cdef pr(void *pointer):
+     # convert a void* to a 0x... value
+     return '0x%x' % <unsigned long>pointer
