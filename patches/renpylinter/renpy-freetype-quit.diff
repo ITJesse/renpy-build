@@ -1,45 +1,111 @@
---- a/renpy/renpy/text/ftfont.pyx	2026-10-06 02:32:09
-+++ b/renpy/renpy/text/ftfont.pyx	2026-10-06 02:32:09
-@@ -68,6 +68,23 @@
+--- a/renpy/renpy/text/ftfont.pyx
++++ b/renpy/renpy/text/ftfont.pyx
+@@ -68,7 +68,61 @@
      error = FT_Init_FreeType(&library)
      if error:
          raise FreetypeError(error)
 +
 +
-+def quit():
-+    """
-+    Destroys the FreeType library that init() created, and with it every
-+    face that is still open. Upstream never calls FT_Done_FreeType; this
-+    exists for hosts that run several Ren'Py sessions in one process
-+    (RenPyLinter), where the module's statics are reset between sessions
-+    and the library would otherwise stay allocated once per session.
-+    After this, the __dealloc__ methods below skip their FreeType calls.
-+    """
++# RenPyLinter: the number of FTFace / FTFont objects alive, and whether
++# quit() is waiting for the last of them before destroying the library.
++cdef int live_objects = 0
++cdef bint quit_pending = False
 +
-+    global library
++
++cdef void _done_library():
++    global library, quit_pending
++
++    quit_pending = False
 +
 +    if library != NULL:
 +        FT_Done_FreeType(library)
 +        library = NULL
++
++
++cdef void _object_created():
++    global live_objects
++
++    live_objects += 1
++
++
++cdef void _object_destroyed():
++    global live_objects
++
++    live_objects -= 1
++
++    if live_objects <= 0 and quit_pending:
++        _done_library()
++
++
++def quit():
++    """
++    Destroys the FreeType library that init() created, immediately when no
++    FTFace / FTFont is alive and otherwise from the last of their
++    __dealloc__ methods, so every bitmap, stroker and face is released
++    through FreeType first. Upstream never calls FT_Done_FreeType; this
++    exists for hosts that run several Ren'Py sessions in one process
++    (RenPyLinter), where the module's statics are reset between sessions
++    and the library would otherwise stay allocated once per session.
++    Returns True when the library was destroyed now, False when that is
++    deferred to the last __dealloc__.
++    """
  
++    global quit_pending
++
++    if live_objects > 0:
++        quit_pending = True
++        return False
++
++    _done_library()
++    return True
++
  cdef bint is_vs(unsigned int char):
      if 0xfe00 <= char <= 0xfe0f: # VS1-16
-@@ -275,11 +292,14 @@
+         return True
+@@ -187,6 +241,12 @@
+ 
+         public object fn
+ 
++    def __cinit__(self, *args, **kwargs):
++        _object_created()
++
++    def __dealloc__(self):
++        _object_destroyed()
++
+     def __init__(self, f, index, fn):
+ 
+         cdef int error
+@@ -268,6 +328,8 @@
+         int hinting
+ 
+     def __cinit__(self):
++        _object_created()
++
+         for i from 0 <= i < 256:
+             self.cache[i].index = -1
+             FT_Bitmap_New(&(self.cache[i].bitmap))
+@@ -275,15 +337,19 @@
          init_gsubtable(&self.gsubtable)
  
      def __dealloc__(self):
 -        for i from 0 <= i < 256:
 -            FT_Bitmap_Done(library, &(self.cache[i].bitmap))
-+        # After quit() the library, and the allocator the bitmaps and the
-+        # stroker came from, are gone.
+-
+-        if self.stroker != NULL:
+-            FT_Stroker_Done(self.stroker)
++        # library is NULL only if quit() ran with nothing alive.
 +        if library != NULL:
 +            for i from 0 <= i < 256:
 +                FT_Bitmap_Done(library, &(self.cache[i].bitmap))
  
--        if self.stroker != NULL:
--            FT_Stroker_Done(self.stroker)
 +            if self.stroker != NULL:
 +                FT_Stroker_Done(self.stroker)
- 
++
          free_gsubtable(&self.gsubtable)
  
++        _object_destroyed()
+ 
++
+     def __init__(self, face, float size, float bold, bint italic, int outline, bint antialias, bint vertical, hinting):
+ 
+         if size < 1:

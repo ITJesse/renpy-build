@@ -40,8 +40,9 @@ pyobjus-free-call-result-buffer.diff task:pyobjus
 # call FT_Done_FreeType. The handle is a module static that RenPyLinter
 # zeroes between its in-process sessions, so one FT_Library plus its
 # modules stayed on the default heap per session. Adds quit(), which the
-# host's main.py calls at shutdown, and makes the __dealloc__ FreeType
-# calls no-ops once the library is gone.
+# host's main.py calls at shutdown: it destroys the library at once when no
+# face / font object is alive and otherwise from the last __dealloc__, so
+# bitmaps, strokers and faces still go through FreeType.
 renpy-freetype-quit.diff root
 
 # pyobjus' autoclass() instantiates the class it builds and parks that
