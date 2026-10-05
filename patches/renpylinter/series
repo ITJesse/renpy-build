@@ -49,10 +49,12 @@ pyobjus-free-call-result-buffer-9c0ca61.diff task:pyobjus
 renpy-freetype-quit.diff root
 
 # pyobjus' autoclass() instantiates the class it builds and parks that
-# instance in every ObjcMethod.p_class, while the class sits in the
-# module-static oclass_register that Py_Finalize never releases, so the
-# Objective-C instance (SwiftBridge, UIDevice, AVSpeechSynthesizer, the
-# last NSString a call returned, ...) was never released. Adds
-# clear_autoclass_cache() for the host's main.py to call before
+# instance in every ObjcMethod.p_class of the class, while the class sits
+# in the module-static oclass_register that Py_Finalize never releases, so
+# the Objective-C instance (SwiftBridge, UIDevice, AVSpeechSynthesizer, the
+# last NSString a call returned, ...) was never released; the same
+# instance <-> class cycle also pins any proxy Ren'Py keeps in a store or
+# module global. Adds clear_autoclass_cache(), which drops every p_class
+# and empties the registry, for the host's main.py to call before
 # finalization.
 pyobjus-clear-autoclass-cache.diff task:pyobjus
