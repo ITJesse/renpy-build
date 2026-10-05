@@ -55,3 +55,14 @@ renpy-freetype-quit.diff root
 # and empties the registry, for the host's main.py to call before
 # finalization.
 pyobjus-clear-autoclass-cache.diff task:pyobjus
+
+# pyobjus retained every object a method returned, but alloc, new...,
+# copy..., mutableCopy... and init... already hand the caller a +1
+# reference (Cocoa ownership; ARC's ns_returns_retained), so each
+# alloc().init() proxy and each objc_str() leaked one retain count
+# (AVSpeechSynthesizer grew by one per session with no Python proxy left,
+# RenPyLinter-ios diagnostics/memory-2026-10-06-freetype-pyobjus-fix/run9).
+# Wrap those results without retaining; when init returns a different
+# object than its receiver (class clusters), the receiver proxy no longer
+# releases what init consumed. Applied after the other pyobjus patches.
+pyobjus-owned-returns.diff task:pyobjus
