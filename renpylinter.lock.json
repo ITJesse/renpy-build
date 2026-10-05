@@ -34,7 +34,7 @@
     "asset": "renpylinter-sdl3-ios-arm64.tar.gz",
     "sha256": "ec1103d2c78ad8cde55a3a4d3ca679d845c11cdc3562679119e7a62e5cc1368d"
   },
-  "patches_sha256": "85f499ea44bd3691f578466acdb4f389bf92494a11a6d6048a7595984aaed032",
+  "patches_sha256": "9108fd8452c435d5653863bf227f9bd6770c44ee94ed11103da4d76c5830069a",
   "targets": [
     "ios-arm64",
     "ios-sim-arm64"
