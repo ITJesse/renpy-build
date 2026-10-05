@@ -1,0 +1,100 @@
+--- a/pyobjus/pyobjus.pyx
++++ b/pyobjus/pyobjus.pyx
+@@ -77,6 +77,25 @@
+ dev_platform = PLATFORM
+ 
+ 
++cdef bint _returns_owned_reference(bytes name):
++    """
++    Whether the selector hands its caller a +1 reference: Cocoa's alloc,
++    new..., copy..., mutableCopy... and init... families (what ARC calls
++    ns_returns_retained). Everything else returns an autoreleased or
++    borrowed reference that the proxy must retain. (RenPyLinter)
++    """
++    for prefix in (b'alloc', b'new', b'copy', b'mutableCopy', b'init'):
++        if name == prefix:
++            return True
++        if name.startswith(prefix) and not name[len(prefix):len(prefix) + 1].islower():
++            return True
++    return False
++
++
++cdef bint _is_init_selector(bytes name):
++    return name == b'init' or (name.startswith(b'init') and not name[4:5].islower())
++
++
+ cdef pr(void *pointer):
+     # convert a void* to a 0x... value
+     return '0x%x' % <unsigned long>pointer
+@@ -203,6 +222,7 @@
+     cdef SEL selector
+     cdef SEL *selectors
+     cdef ObjcClassInstance p_class
++    cdef object p_receiver
+     cdef int is_varargs
+     cdef int is_ready
+     cdef ffi_cif f_cif
+@@ -346,6 +366,7 @@
+             return self
+         cdef ObjcClassInstance oc = obj
+         self.o_instance = oc.o_instance
++        self.p_receiver = obj
+         return self
+ 
+     def __call__(self, *args, **kwargs):
+@@ -504,8 +525,27 @@
+             if sig == b'@':
+                 ret_id = (<id>res_ptr[0])
+                 if ret_id == self.o_instance:
++                    # The receiver proxy already owns this object (init
++                    # returning self, builder-style setters).
++                    if self.p_receiver is not None:
++                        return self.p_receiver
+                     return self.p_class
+ 
++                # RenPyLinter: alloc / new / copy / mutableCopy / init hand
++                # us a +1 reference. Wrapping it with another retain (the
++                # default for autoreleased results) leaked one count per
++                # object: every alloc().init() proxy, every objc_str().
++                if ret_id != NULL and _returns_owned_reference(self.name):
++                    if _is_init_selector(self.name) and self.p_receiver is not None:
++                        # init consumed the receiver (a class-cluster
++                        # placeholder) and returned another object: the
++                        # receiver proxy must not release what init took.
++                        ocl = self.p_receiver
++                        ocl.o_instance = NULL
++                    return convert_return_value(
++                        convert_to_cy_cls_instance(ret_id, self.main_cls_name, 0),
++                        self.main_cls_name, self.name)
++
+             dprint("ret_py_val res_ptr={!r} sig={!r} members={!r} main_cls_name={!r}".format(
+                 pr(res_ptr), sig, kwargs.get('members'), self.main_cls_name
+             ))
+@@ -521,6 +561,7 @@
+             free(f_args)
+             if res_ptr != NULL and del_res_ptr:
+                 free(res_ptr)
++            self.p_receiver = None
+ 
+ registers = []
+ tmp_properties_keys = []
+--- a/pyobjus/pyobjus_conversions.pxi
++++ b/pyobjus/pyobjus_conversions.pxi
+@@ -152,7 +152,7 @@
+     return val_ptr
+ 
+ 
+-cdef convert_to_cy_cls_instance(id ret_id, main_cls_name=None):
++cdef convert_to_cy_cls_instance(id ret_id, main_cls_name=None, int retain=1):
+     ''' Function for converting C pointer into Cython ObjcClassInstance type
+     Args:
+         ret_id: C pointer
+@@ -179,7 +179,7 @@
+         omethod_partial_register[bret] = load_instance_methods
+ 
+     cret = autoclass(bret, new_instance=True, load_instance_methods=load_instance_methods)(noinstance=True)
+-    cret.instanciate_from(ret_id)
++    cret.instanciate_from(ret_id, retain)
+     dprint('<-- return object', cret)
+     return cret
+ 
