@@ -23,6 +23,9 @@ def unpack(c: Context):
     # RenPyLinter: free what the Objective-C runtime's copy functions return.
     c.patch("renpylinter/pyobjus-free-runtime-copies.diff")
 
+    # RenPyLinter: free the ffi return-value buffer of every ObjcMethod call.
+    c.patch("renpylinter/pyobjus-free-call-result-buffer.diff")
+
 
 @task(kind="host-python")
 def host_unpack(c: Context):

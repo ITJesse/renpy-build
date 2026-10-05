@@ -19,7 +19,7 @@
     "release": "sdl2-ios-6-1",
     "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1"
   },
-  "patches_sha256": "7916ab54820467fc92e30d0d046cb9926a062b4cdd746b65c5e267cc935e5167",
+  "patches_sha256": "1def82e5f00be49812a1b03bcd60cd84978cfed3c1e0245aeaa38fc712c6ed9e",
   "targets": [
     "ios-arm64",
     "ios-sim-arm64"
