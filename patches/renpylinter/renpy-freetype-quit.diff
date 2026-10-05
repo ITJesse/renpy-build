@@ -1,103 +1,217 @@
---- a/renpy/renpy/text/ftfont.pyx	2026-10-06 02:32:09
-+++ b/renpy/renpy/text/ftfont.pyx	2026-10-06 02:32:09
-@@ -69,6 +69,23 @@
+--- a/renpy/renpy/text/ftfont.pyx
++++ b/renpy/renpy/text/ftfont.pyx
+@@ -69,6 +69,60 @@
      if error:
          raise FreetypeError(error)
  
 +
-+def quit():
-+    """
-+    Destroys the FreeType library that init() created, and with it every
-+    face that is still open. Upstream never calls FT_Done_FreeType; this
-+    exists for hosts that run several Ren'Py sessions in one process
-+    (RenPyLinter), where the module's statics are reset between sessions
-+    and the library would otherwise stay allocated once per session.
-+    After this, the __dealloc__ methods below skip their FreeType calls.
-+    """
++# RenPyLinter: the number of FTFace / FTFont objects alive, and whether
++# quit() is waiting for the last of them before destroying the library.
++cdef int live_objects = 0
++cdef bint quit_pending = False
 +
-+    global library
++
++cdef void _done_library():
++    global library, quit_pending
++
++    quit_pending = False
 +
 +    if library != NULL:
 +        FT_Done_FreeType(library)
 +        library = NULL
 +
++
++cdef void _object_created():
++    global live_objects
++
++    live_objects += 1
++
++
++cdef void _object_destroyed():
++    global live_objects
++
++    live_objects -= 1
++
++    if live_objects <= 0 and quit_pending:
++        _done_library()
++
++
++def quit():
++    """
++    Destroys the FreeType library that init() created, immediately when no
++    FTFace / FTFont is alive and otherwise from the last of their
++    __dealloc__ methods, so every bitmap, stroker and face is released
++    through FreeType first. Upstream never calls FT_Done_FreeType; this
++    exists for hosts that run several Ren'Py sessions in one process
++    (RenPyLinter), where the module's statics are reset between sessions
++    and the library would otherwise stay allocated once per session.
++    Returns True when the library was destroyed now, False when that is
++    deferred to the last __dealloc__.
++    """
++
++    global quit_pending
++
++    if live_objects > 0:
++        quit_pending = True
++        return False
++
++    _done_library()
++    return True
++
  cdef bint is_vs(unsigned int char):
      if 0xfe00 <= char <= 0xfe0f: # VS1-16
          return True
-@@ -189,7 +206,8 @@
+@@ -188,10 +242,15 @@
+ 
          public object fn
  
++    def __cinit__(self, *args, **kwargs):
++        _object_created()
++
      def __dealloc__(self):
 -        if self.face != NULL:
-+        # quit() destroys every face with the library.
 +        if self.face != NULL and library != NULL:
              FT_Done_Face(self.face)
  
++        _object_destroyed()
++
      def __init__(self, f, index, fn):
-@@ -280,11 +298,14 @@
+ 
+         cdef int error
+@@ -273,6 +332,8 @@
+         int hinting
+ 
+     def __cinit__(self):
++        _object_created()
++
+         for i from 0 <= i < 256:
+             self.cache[i].index = -1
+             FT_Bitmap_New(&(self.cache[i].bitmap))
+@@ -280,15 +341,19 @@
          init_gsubtable(&self.gsubtable)
  
      def __dealloc__(self):
 -        for i from 0 <= i < 256:
 -            FT_Bitmap_Done(library, &(self.cache[i].bitmap))
-+        # After quit() the library, and the allocator the bitmaps and the
-+        # stroker came from, are gone.
+-
+-        if self.stroker != NULL:
+-            FT_Stroker_Done(self.stroker)
++        # library is NULL only if quit() ran with nothing alive.
 +        if library != NULL:
 +            for i from 0 <= i < 256:
 +                FT_Bitmap_Done(library, &(self.cache[i].bitmap))
  
--        if self.stroker != NULL:
--            FT_Stroker_Done(self.stroker)
 +            if self.stroker != NULL:
 +                FT_Stroker_Done(self.stroker)
- 
++
          free_gsubtable(&self.gsubtable)
  
---- a/renpy/renpy/text/hbfont.pyx	2026-10-06 02:32:09
-+++ b/renpy/renpy/text/hbfont.pyx	2026-10-06 02:32:09
-@@ -211,6 +211,23 @@
++        _object_destroyed()
+ 
++
+     def __init__(self, face, float size, float bold, bint italic, int outline, bint antialias, bint vertical, hinting):
+ 
+         if size < 1:
+--- a/renpy/renpy/text/hbfont.pyx
++++ b/renpy/renpy/text/hbfont.pyx
+@@ -211,7 +211,61 @@
      error = FT_Init_FreeType(&library)
      if error:
          raise FreetypeError(error)
 +
 +
-+def quit():
-+    """
-+    Destroys the FreeType library that init() created, and with it every
-+    face that is still open. Upstream never calls FT_Done_FreeType; this
-+    exists for hosts that run several Ren'Py sessions in one process
-+    (RenPyLinter), where the module's statics are reset between sessions
-+    and the library would otherwise stay allocated once per session.
-+    After this, the __dealloc__ methods below skip their FreeType calls.
-+    """
++# RenPyLinter: the number of HBFace / HBFont objects alive, and whether
++# quit() is waiting for the last of them before destroying the library.
++cdef int live_objects = 0
++cdef bint quit_pending = False
 +
-+    global library
++
++cdef void _done_library():
++    global library, quit_pending
++
++    quit_pending = False
 +
 +    if library != NULL:
 +        FT_Done_FreeType(library)
 +        library = NULL
++
++
++cdef void _object_created():
++    global live_objects
++
++    live_objects += 1
++
++
++cdef void _object_destroyed():
++    global live_objects
++
++    live_objects -= 1
++
++    if live_objects <= 0 and quit_pending:
++        _done_library()
++
++
++def quit():
++    """
++    Destroys the FreeType library that init() created, immediately when no
++    HBFace / HBFont is alive and otherwise from the last of their
++    __dealloc__ methods, so every bitmap, stroker and face is released
++    through FreeType first. Upstream never calls FT_Done_FreeType; this
++    exists for hosts that run several Ren'Py sessions in one process
++    (RenPyLinter), where the module's statics are reset between sessions
++    and the library would otherwise stay allocated once per session.
++    Returns True when the library was destroyed now, False when that is
++    deferred to the last __dealloc__.
++    """
  
++    global quit_pending
++
++    if live_objects > 0:
++        quit_pending = True
++        return False
++
++    _done_library()
++    return True
++
  cdef bint is_vs(unsigned int char):
      if 0xfe00 <= char <= 0xfe0f: # VS1-16
-@@ -366,6 +383,10 @@
+         return True
+@@ -365,12 +419,18 @@
+         public object current_instance
          public object current_axis
  
-     def __dealloc__(self):
-+        # quit() destroys every face with the library.
-+        if library == NULL:
-+            return
++    def __cinit__(self, *args, **kwargs):
++        _object_created()
 +
-         if self.mm_var:
-             FT_Done_MM_Var(library, self.mm_var)
+     def __dealloc__(self):
+-        if self.mm_var:
+-            FT_Done_MM_Var(library, self.mm_var)
++        if library != NULL:
++            if self.mm_var:
++                FT_Done_MM_Var(library, self.mm_var)
  
-@@ -500,11 +521,14 @@
+-        FT_Done_Face(self.face)
++            FT_Done_Face(self.face)
+ 
++        _object_destroyed()
++
+     def __init__(self, f, index, fn):
+ 
+         cdef int error
+@@ -495,20 +555,26 @@
+ 
+ 
+     def __cinit__(self):
++        _object_created()
++
+         for i from 0 <= i < 256:
+             self.cache[i].index = -1
              FT_Bitmap_New(&(self.cache[i].bitmap))
  
      def __dealloc__(self):
 -        for i from 0 <= i < 256:
 -            FT_Bitmap_Done(library, &(self.cache[i].bitmap))
-+        # After quit() the library, and the allocator the bitmaps and the
-+        # stroker came from, are gone.
++        # library is NULL only if quit() ran with nothing alive.
 +        if library != NULL:
 +            for i from 0 <= i < 256:
 +                FT_Bitmap_Done(library, &(self.cache[i].bitmap))
@@ -109,3 +223,9 @@
  
          if self.hb_font:
              hb_font_destroy(self.hb_font)
+ 
++        _object_destroyed()
++
+     def __init__(self, face, float size, float bold, bint italic, int outline, bint antialias, bint vertical, hinting, instance, axis):
+ 
+         self.face_object = face
