@@ -212,7 +212,7 @@ def build_autotools(prefix):
         archive = work / Path(pin["url"]).name
         urls = [pin["url"]]
         if pin["url"].startswith("https://ftp.gnu.org/gnu/"):
-            urls.append(pin["url"].replace("https://ftp.gnu.org/gnu/", "https://mirrors.kernel.org/gnu/", 1))
+            urls.insert(0, pin["url"].replace("https://ftp.gnu.org/gnu/", "https://mirrors.kernel.org/gnu/", 1))
         for index, url in enumerate(urls):
             try:
                 run(["curl", "-sfL", "--connect-timeout", "15", "--max-time", "90",
