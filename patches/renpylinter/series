@@ -66,3 +66,7 @@ pyobjus-clear-autoclass-cache.diff task:pyobjus
 # object than its receiver (class clusters), the receiver proxy no longer
 # releases what init consumed. Applied after the other pyobjus patches.
 pyobjus-owned-returns.diff task:pyobjus
+
+# Pack oversized parent Surface rows before GL uploads; preserve tile pixels
+# and borders while avoiding MetalANGLE PBO blit row-pitch limits.
+renpy-pack-texture-upload.diff root
