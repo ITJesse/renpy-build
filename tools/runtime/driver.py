@@ -210,7 +210,17 @@ def build_autotools(prefix):
         env.pop(env_name, None)
     for pin in pins:
         archive = work / Path(pin["url"]).name
-        run(["curl", "-sfL", "--retry", "4", "-o", archive, pin["url"]])
+        urls = [pin["url"]]
+        if pin["url"].startswith("https://ftp.gnu.org/gnu/"):
+            urls.append(pin["url"].replace("https://ftp.gnu.org/gnu/", "https://mirrors.kernel.org/gnu/", 1))
+        for index, url in enumerate(urls):
+            try:
+                run(["curl", "-sfL", "--connect-timeout", "15", "--max-time", "90",
+                     "--retry", "1", "-o", archive, url])
+                break
+            except subprocess.CalledProcessError:
+                if index == len(urls) - 1:
+                    raise
         if bundle.sha256(archive) != pin["sha256"]:
             raise SystemExit(f"{archive.name}: sha256 mismatch")
         run(["tar", "xf", archive, "-C", work])
@@ -954,8 +964,8 @@ def engine(args):
     # check_sdk() verified names this version.
     py_items.append((vc_version, out / "renpy" / ("vc_version" + bytecode), "renpy/vc_version.py"))
     compile_python(hostpython, py_items, version_cfg["python"], commit_time(src))
-    for rel, path in sdk_compiled.items():
-        shutil.copy2(path, out / "renpy" / rel)
+    changed_sources = output(["git", "-C", src / "renpy", "diff", "--name-only", "--", "renpy"]).splitlines()
+    source_only_scripts = bundle.copy_compiled_scripts(sdk_compiled, out / "renpy", changed_sources)
 
     if list(out.rglob("Live2DCubismCore.h")):
         gates.fail("the proprietary Live2DCubismCore.h must not be bundled")
@@ -997,7 +1007,8 @@ def engine(args):
         "deps": {"release": lock["deps"]["release"], "sha256": lock["deps"]["sha256"],
                  "tooling_commit": deps_info["tooling_commit"]},
         "sdl": sdl_layer(lock),
-        "renpy_sdk": {**lock["renpy_sdk"], "compiled_scripts": len(sdk_compiled),
+        "renpy_sdk": {**lock["renpy_sdk"], "compiled_scripts": len(sdk_compiled) - len(source_only_scripts),
+                      "patched_source_scripts": source_only_scripts,
                       "stale_in_sdk": sdk_stale, "license_from": str(renpy_license.name)},
         "renpy_uv_lock": lock.get("renpy_uv_lock"),
         "downloads": tars_info(src),
