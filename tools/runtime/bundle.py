@@ -56,6 +56,32 @@ def relocate_out(root, prefix):
     return changed
 
 
+def copy_compiled_scripts(compiled, output, changed_sources):
+    """Do not pair a fork-patched common script with pristine SDK bytecode.
+
+    Source-only scripts are compiled by Ren'Py in the host's writable common
+    staging directory. Unchanged SDK scripts keep their verified bytecode.
+    """
+    output = Path(output)
+    changed_sources = set(changed_sources)
+    source_only = []
+    for rel, path in compiled.items():
+        rel = Path(rel)
+        source = rel.with_suffix(rel.suffix[:-1])
+        generated_source = rel.with_name(rel.stem + "_ren.py")
+        changed = next((p for p in (source, generated_source)
+                        if (Path('renpy') / p).as_posix() in changed_sources), None)
+        if changed is not None:
+            if not (output / changed).is_file():
+                raise SystemExit(f"Patched script source missing from bundle: {changed}")
+            if (output / rel).exists():
+                raise SystemExit(f"Stale bytecode present for patched script: {rel}")
+            source_only.append(changed.as_posix())
+            continue
+        shutil.copy2(path, output / rel)
+    return sorted(source_only)
+
+
 def relocate_in(root, relative_paths, prefix):
     for rel in relative_paths:
         path = Path(root) / rel
