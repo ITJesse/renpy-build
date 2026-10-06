@@ -58,3 +58,6 @@ pyobjus-clear-autoclass-cache.diff task:pyobjus
 # object than its receiver (class clusters), the receiver proxy no longer
 # releases what init consumed. Applied after the other pyobjus patches.
 pyobjus-owned-returns.diff task:pyobjus
+
+# Pack oversized parent rows in straight and premultiplied GL uploads.
+renpy-pack-texture-upload.diff root
