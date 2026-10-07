@@ -1,0 +1,112 @@
+--- a/renpy/renpy/gl2/live2dmodel.pyx
++++ b/renpy/renpy/gl2/live2dmodel.pyx
+@@ -418,8 +418,32 @@
+         cdef csmVector4 multiply
+         cdef csmVector4 screen
+ 
++        # Only visible drawables, and drawables a visible one uses as a mask,
++        # need Renders (Ren'Py 8.4). A drawable with zero opacity contributes
++        # nothing under any of the blend modes, so it counts as hidden.
++        used_masks = set()
++
++        for 0 <= i < self.drawable_count:
++
++            if not (self.drawable_dynamic_flags[i] & csmIsVisible):
++                continue
++
++            if self.drawable_opacities[i] == 0.0:
++                continue
++
++            for 0 <= j < self.drawable_mask_counts[i]:
++                used_masks.add(self.drawable_masks[i][j])
++
+         for 0 <= i < self.drawable_count:
+ 
++            is_visible = (self.drawable_dynamic_flags[i] & csmIsVisible) and self.drawable_opacities[i] != 0.0
++            is_mask = i in used_masks
++
++            if not is_visible and not is_mask:
++                mask_renders.append(None)
++                raw_renders.append(None)
++                continue
++
+             multiply = self.drawable_multiply_colors[i]
+             screen = self.drawable_screen_colors[i]
+ 
+@@ -437,21 +461,30 @@
+ 
+             tex = textures[self.drawable_texture_indices[i]]
+ 
+-            # Create a render that can be used as a mask.
+-            mr = Render(w, h)
+-            mr.reverse = reverse
+-            mr.forward = forward
+-            mr.mesh = mesh
++            if is_mask:
+ 
+-            mr.add_uniform("u_multiply", multiply_tuple)
+-            mr.add_uniform("u_screen", screen_tuple)
++                # Create a render that can be used as a mask.
++                mr = Render(w, h)
++                mr.reverse = reverse
++                mr.forward = forward
++                mr.mesh = mesh
+ 
+-            for s in shaders:
+-                mr.add_shader(s)
++                mr.add_uniform("u_multiply", multiply_tuple)
++                mr.add_uniform("u_screen", screen_tuple)
++
++                for s in shaders:
++                    mr.add_shader(s)
++
++                mr.blit(tex, (0, 0))
++
++                mask_renders.append(mr)
+ 
+-            mr.blit(tex, (0, 0))
++            else:
++                mask_renders.append(None)
+ 
+-            mask_renders.append(mr)
++            if not is_visible:
++                raw_renders.append(None)
++                continue
+ 
+             # Create the render that is actually drawn.
+             r = Render(w, h)
+@@ -474,17 +507,15 @@
+             elif self.drawable_constant_flags[i] & csmBlendMultiplicative:
+                 r.add_property("blend_func", (GL_FUNC_ADD, GL_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_FUNC_ADD, GL_ZERO, GL_ONE))
+ 
+-            if self.drawable_dynamic_flags[i] & csmIsVisible:
+-
+-                alpha = self.drawable_opacities[i]
++            alpha = self.drawable_opacities[i]
+ 
+-                if alpha != 1.0:
++            if alpha != 1.0:
+ 
+-                    r.add_shader("renpy.alpha")
+-                    r.add_uniform("u_renpy_alpha", alpha)
+-                    r.add_uniform("u_renpy_over", 1.0)
++                r.add_shader("renpy.alpha")
++                r.add_uniform("u_renpy_alpha", alpha)
++                r.add_uniform("u_renpy_over", 1.0)
+ 
+-                renders.append((self.drawable_render_orders[i], r))
++            renders.append((self.drawable_render_orders[i], r))
+ 
+         multi_masks = { }
+ 
+@@ -498,6 +529,10 @@
+ 
+             r = raw_renders[i]
+ 
++            # Hidden drawables have no Render to mask.
++            if r is None:
++                continue
++
+             if self.drawable_mask_counts[i] == 1:
+                 m = mask_renders[self.drawable_masks[i][0]]
+             else:
