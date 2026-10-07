@@ -76,3 +76,18 @@ renpy-ios-legacy-surface-cache.diff root
 
 # Do not recycle zero-sized GL1 names retaining MetalANGLE image views.
 renpy-ios-delete-retired-textures.diff root
+
+# Live2D drawables and masks used ppu * 2 square Renders covering the whole
+# [-1, 1] model space (IGNITER: 3.6x its canvas), and each mask is rendered
+# to a texture every frame. Size them to the canvas and map mask coordinates
+# through u_live2d_ppu/u_live2d_offset, backported from Ren'Py 8.3 (013a0a18)
+# and 8.4 (93980b8e). The offset stays at the canvas centre, where the square
+# renders were blitted, so every drawable keeps its position.
+renpy-live2d-canvas-masks.diff root
+
+# Build Live2D Renders only for visible drawables and for drawables a visible
+# one uses as a mask, backported from Ren'Py 8.4 (2f6fd4d6, abc68d5b).
+# 7.5/8.0 mask with the masking drawable's own Render, which carries its
+# masks too, so masks of masks are kept.
+# Applied after the mask sizing patch.
+renpy-live2d-skip-unused-drawables.diff root
