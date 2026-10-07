@@ -1,0 +1,11 @@
+--- a/renpy/renpy/gl2/live2dmodel.pyx
++++ b/renpy/renpy/gl2/live2dmodel.pyx
+@@ -507,7 +507,7 @@
+                 m = multi_masks.get(key, None)
+ 
+                 if m is None:
+-                    m = renpy.display.render.Render(ppu * 2, ppu * 2)
++                    m = renpy.display.render.Render(w, h)
+ 
+                     for j in key:
+                         m.blit(mask_renders[j], (0, 0))
