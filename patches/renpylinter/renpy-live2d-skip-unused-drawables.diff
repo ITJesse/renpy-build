@@ -1,0 +1,68 @@
+--- a/renpy/renpy/gl2/live2dmodel.pyx
++++ b/renpy/renpy/gl2/live2dmodel.pyx
+@@ -382,8 +382,45 @@
+         renders = [ ]
+         raw_renders = [ ]
+ 
++        # Only visible drawables, and drawables a visible one uses as a mask,
++        # need Renders (Ren'Py 8.4). A drawable with zero opacity contributes
++        # nothing under any of the blend modes, so it counts as hidden.
++        used_masks = set()
++
+         for 0 <= i < self.drawable_count:
+ 
++            if not (self.drawable_dynamic_flags[i] & csmIsVisible):
++                continue
++
++            if self.drawable_opacities[i] == 0.0:
++                continue
++
++            for 0 <= j < self.drawable_mask_counts[i]:
++                used_masks.add(self.drawable_masks[i][j])
++
++        # A 7.5/8.0 mask is the masking drawable's own Render, which carries
++        # that drawable's masks too, so those are needed as well.
++        pending = list(used_masks)
++
++        while pending:
++            j = pending.pop()
++
++            for k in range(self.drawable_mask_counts[j]):
++                nested = self.drawable_masks[j][k]
++
++                if nested not in used_masks:
++                    used_masks.add(nested)
++                    pending.append(nested)
++
++        for 0 <= i < self.drawable_count:
++
++            is_visible = (self.drawable_dynamic_flags[i] & csmIsVisible) and self.drawable_opacities[i] != 0.0
++            is_mask = i in used_masks
++
++            if not is_visible and not is_mask:
++                raw_renders.append(None)
++                continue
++
+             mesh = Mesh2(TEXTURE_LAYOUT, self.drawable_vertex_counts[i], self.drawable_index_counts[i] // 3)
+ 
+             mesh.points = self.drawable_vertex_counts[i]
+@@ -409,7 +446,7 @@
+             elif self.drawable_constant_flags[i] & csmBlendMultiplicative:
+                 r.add_property("blend_func", (GL_FUNC_ADD, GL_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_FUNC_ADD, GL_ZERO, GL_ONE))
+ 
+-            if self.drawable_dynamic_flags[i] & csmIsVisible:
++            if is_visible:
+ 
+                 alpha = self.drawable_opacities[i]
+ 
+@@ -436,6 +473,10 @@
+ 
+             r = raw_renders[i]
+ 
++            # Hidden drawables have no Render to mask.
++            if r is None:
++                continue
++
+             if self.drawable_mask_counts[i] == 1:
+                 m = raw_renders[self.drawable_masks[i][0]]
+             else:
