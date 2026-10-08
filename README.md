@@ -226,7 +226,7 @@ The pythonlib task's output depends on the renpy-build version: 7.5, 8.0 and
 8.1 copy what `make install` left in `__pycache__` (timestamp headers,
 absolute build paths, optimize 0), newer branches recompile through
 `Context.compile` (unchecked-hash, `lib/pythonX.Y/...` paths, optimize 0 on
-Python 3). `bytecode.recompile_stdlib` (driver step after the stdlib copy)
+Python 3). `pybytecode.recompile_stdlib` (driver step after the stdlib copy)
 replaces that tree, so the policy does not depend on the branch:
 
 * each bundled module's source is identified, not guessed from its name: a
@@ -244,7 +244,7 @@ replaces that tree, so the policy does not depend on the branch:
 
 The same module therefore has the same bytes in every engine of a Python
 version, which the app's bundle de-duplication relies on.
-`tools/runtime/test_bytecode.py` covers source identification, the
+`tools/runtime/test_pybytecode.py` covers source identification, the
 optimization and determinism (`PYTHON2=<python2.7>` adds the `.pyo` path).
 
 ## Gates

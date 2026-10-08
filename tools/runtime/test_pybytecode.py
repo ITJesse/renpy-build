@@ -1,7 +1,7 @@
-"""bytecode.recompile_stdlib: source identification, optimization, determinism.
+"""pybytecode.recompile_stdlib: source identification, optimization, determinism.
 
 Python 3 runs with this interpreter. Set PYTHON2 to a Python 2.7 to also test
-the .pyo path:  PYTHON2=/path/to/python2.7 python3 test_bytecode.py
+the .pyo path:  PYTHON2=/path/to/python2.7 python3 test_pybytecode.py
 """
 import importlib.util
 import marshal
@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import bytecode
+import pybytecode
 
 MODULE = '"""Module docstring."""\n\ndef f(x):\n    """Function docstring."""\n    assert x\n    return x\n'
 OTHER = 'def f(x):\n    return x + 1\n'
@@ -57,7 +57,7 @@ class Python3Tests(unittest.TestCase):
         return stdlib
 
     def recompile(self, stdlib):
-        return bytecode.recompile_stdlib(sys.executable, "3", stdlib, PYVER,
+        return pybytecode.recompile_stdlib(sys.executable, "3", stdlib, PYVER,
                                          source_roots=[self.root / "src"],
                                          extra_sources=sorted(self.runtime.glob("*.py")))
 
@@ -116,12 +116,12 @@ class Python2Tests(unittest.TestCase):
             subprocess.run([py2, "-O", "-c", "import py_compile, sys; py_compile.compile(sys.argv[1], sys.argv[2])",
                             str(source), str(stdlib / "mod.pyo")], check=True)
             before = (stdlib / "mod.pyo").read_bytes()
-            report = bytecode.recompile_stdlib(py2, "2", stdlib, "python2.7",
+            report = pybytecode.recompile_stdlib(py2, "2", stdlib, "python2.7",
                                                source_roots=[root / "src"], extra_sources=[])
             self.assertEqual(report["recompiled"], 1)
             after = (stdlib / "mod.pyo").read_bytes()
             self.assertEqual(after[:4], before[:4])
-            self.assertEqual(after[4:8], bytecode.PY2_PYO_MTIME.to_bytes(4, "little"))
+            self.assertEqual(after[4:8], pybytecode.PY2_PYO_MTIME.to_bytes(4, "little"))
             check = subprocess.run([py2, "-c", "import marshal, sys; c = marshal.loads(open(sys.argv[1], 'rb').read()[8:]);"
                                     "print(c.co_filename); print('Function docstring.' in repr(c.co_consts) or"
                                     " any('Function docstring.' in repr(x.co_consts) for x in c.co_consts if hasattr(x, 'co_consts')))",

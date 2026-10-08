@@ -36,7 +36,7 @@ TOOLING = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 
 import bundle  # noqa: E402
-import bytecode  # noqa: E402
+import pybytecode  # noqa: E402
 import gates  # noqa: E402
 import machos  # noqa: E402
 import recipe  # noqa: E402
@@ -804,7 +804,7 @@ def compile_python(hostpython, items, python_major, mtime):
     """items: [(source, destination, display path)].
 
     Optimized like upstream's Context.compile for Python 2 (-OO, see
-    bytecode.py). Python 3: unchecked-hash pyc. Python 2: pyo, whose header
+    pybytecode.py). Python 3: unchecked-hash pyc. Python 2: pyo, whose header
     embeds the source mtime, so sources are set to SOURCE_DATE_EPOCH first.
     """
 
@@ -816,14 +816,14 @@ def compile_python(hostpython, items, python_major, mtime):
             "for src, dst, dfile in json.load(sys.stdin):\n"
             "    py_compile.compile(src, cfile=dst, dfile=dfile, doraise=True)\n"
         )
-        cmd = [str(hostpython), "-" + "O" * bytecode.OPTIMIZE, "-c", script]
+        cmd = [str(hostpython), "-" + "O" * pybytecode.OPTIMIZE, "-c", script]
     else:
         script = (
             "import json, py_compile, sys\n"
             "for src, dst, dfile in json.load(sys.stdin):\n"
             "    py_compile.compile(src, cfile=dst, dfile=dfile, doraise=True, optimize=%d,\n"
             "                       invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)\n"
-            % bytecode.OPTIMIZE
+            % pybytecode.OPTIMIZE
         )
         cmd = [str(hostpython), "-c", script]
     payload = json.dumps([[str(a), str(b), c] for a, b, c in items])
@@ -932,7 +932,7 @@ def engine(args):
     hostpython = install_dir(src, "ios-arm64") / "bin" / f"hostpython{version_cfg['python']}"
 
     # Python standard library (pythonlib task output), recompiled from its
-    # sources at optimize=2 with deterministic headers (bytecode.py). The
+    # sources at optimize=2 with deterministic headers (pybytecode.py). The
     # roots are where the pythonlib task finds modules: the target install's
     # lib (site-packages included), pytmp (pyjnius, pyobjus, steam), source/
     # (8.5's brotli), the committed steamapi.py and runtime/ (site.py,
@@ -940,7 +940,7 @@ def engine(args):
     # another name).
     stdlib = src / "renpy" / "lib" / pythonver
     bundle.copy_tree(stdlib, out / "python" / "lib" / pythonver)
-    stdlib_report = bytecode.recompile_stdlib(
+    stdlib_report = pybytecode.recompile_stdlib(
         hostpython, version_cfg["python"], out / "python" / "lib" / pythonver, pythonver,
         source_roots=[install_dir(src, "ios-arm64") / "lib" / pythonver, src / "tmp" / f"py{version_cfg['python']}",
                       src / "source", src / "steamapi", src / "runtime"],
@@ -1034,9 +1034,9 @@ def engine(args):
         "compile_flags": {t: compile_flags(src, t, version_cfg) for t in TARGETS},
         "archives": archives_info,
         "renpy_files": {"compiled": len(py_items), "copied": len(copied), "excluded": skipped},
-        "bytecode": {"optimize": bytecode.OPTIMIZE,
+        "bytecode": {"optimize": pybytecode.OPTIMIZE,
                      "headers": "unchecked-hash" if version_cfg["python"] == "3"
-                                else f"mtime {bytecode.PY2_PYO_MTIME} (stdlib), SOURCE_DATE_EPOCH (renpy)",
+                                else f"mtime {pybytecode.PY2_PYO_MTIME} (stdlib), SOURCE_DATE_EPOCH (renpy)",
                      "stdlib": stdlib_report},
         "live2d_header": live2d,
         "site_packages": site_packages(install_dir(src, "ios-arm64") / "lib" / pythonver / "site-packages"),
