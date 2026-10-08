@@ -13,6 +13,7 @@ Usage: run_tasks.py --root SRC --python 3 --archs arm64,sim-arm64 MODULE...
 import argparse
 import inspect
 import os
+import shutil
 import sys
 import types
 from pathlib import Path
@@ -36,6 +37,35 @@ def link_sdk(context):
             return
         link.unlink()
     link.symlink_to(target)
+
+
+# Sources a task writes into the Ren'Py lib tree, compiles and deletes (the
+# pythonlib task's site.py / sitecustomize.py / sysconfig.py, made from
+# runtime/ files plus appended lines). pybytecode.py recompiles every bundled
+# module from its real source, so these are kept here, relative to renpy/lib.
+GENERATED_SOURCES = Path("tmp") / "rpl-generated-sources"
+
+
+def keep_deleted_sources(context_class, root):
+    """Wrap Context.unlink so a .py removed from renpy/lib is copied first."""
+
+    unlink = context_class.unlink
+    distlib = (root / "renpy" / "lib").resolve()
+    kept = root / GENERATED_SOURCES
+
+    def wrapper(self, fn):
+        path = Path(self.path(fn))
+        if path.suffix == ".py" and path.is_file():
+            try:
+                rel = path.resolve().relative_to(distlib)
+            except ValueError:
+                rel = None
+            if rel is not None:
+                (kept / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, kept / rel)
+        return unlink(self, fn)
+
+    context_class.unlink = wrapper
 
 
 def main():
@@ -75,6 +105,9 @@ def main():
         def make_context(arch):
             return framework.Context("ios", arch, args.python, root, root / "tmp", root / "pygame_sdl2",
                                      root / "renpy", build_args)
+
+    shutil.rmtree(root / GENERATED_SOURCES, ignore_errors=True)
+    keep_deleted_sources(framework.Context if framework.__name__ == "renpybuild.model" else UpstreamContext, root)
 
     upstream_environment = renpybuild.run.build_environment
 

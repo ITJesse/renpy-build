@@ -229,13 +229,20 @@ absolute build paths, optimize 0), newer branches recompile through
 Python 3). `pybytecode.recompile_stdlib` (driver step after the stdlib copy)
 replaces that tree, so the policy does not depend on the branch:
 
-* each bundled module's source is identified, not guessed from its name: a
-  candidate (`.py` files under the target install's lib, pytmp, `source/`,
-  `steamapi/` and, for top-level modules, every `runtime/*.py`, which is how
-  `site.pyc` from `runtime/site3.py` is found) must compile, at one of the
-  optimization levels the tasks use, to a code object equal to the bundled
-  one. A module with no such source, or with several different ones, stops
-  the build;
+* each bundled module's source is looked for where the pythonlib task finds
+  modules: `<base>/<module>.py` for its search bases (the target install's
+  lib and site-packages, pytmp's pyjnius, pyobjus and steam, and 8.5's
+  `source/brotli`), a source the task generated in the lib tree and deleted
+  after compiling it (`site.py`, `sitecustomize.py`, `sysconfig.py`;
+  `run_tasks.py` keeps a copy in `tmp/rpl-generated-sources`), and, for
+  top-level modules, every `runtime/*.py`. A candidate counts only if it
+  compiles, at one of the optimization levels the tasks use, to a code object
+  equal to the bundled one. Several such candidates with different contents
+  (equal code, different comments) are settled by the bundled module's
+  absolute co_filename, then by a generated source, then by the task's own
+  precedence (Python 3: the last base, Python 2: the first) and listed in
+  build-info (`bytecode.stdlib.chosen_among_differing_sources`). A module
+  with no such source stops the build;
 * it is recompiled from that source at optimize 2 with the display path
   `lib/pythonX.Y/<module>.py`, the one `Context.compile` uses;
 * files that are named like bytecode but are not (some versions copy

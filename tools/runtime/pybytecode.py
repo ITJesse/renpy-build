@@ -9,9 +9,17 @@ optimize 0), newer ones recompile through `Context.compile` (unchecked-hash
 headers, `lib/pythonX.Y/...` paths, still optimize 0 on Python 3).
 `recompile_stdlib` therefore rebuilds that tree from source:
 
-* the source of each bundled module is not guessed from its name: every
-  candidate file is compiled at the optimization levels the tasks use and
-  must produce a code object equal to the bundled one;
+* each bundled module's source is found where the pythonlib task finds
+  modules: `<base>/<module path>.py` for the task's search bases, a source the
+  task generated in the lib tree and deleted after compiling it (kept by
+  run_tasks.py), and, for top-level modules, the runtime/*.py files the task
+  copies there under another name;
+* a candidate is accepted only if it compiles, at an optimization level the
+  tasks use, to a code object equal to the bundled one. Among several
+  accepted candidates with different contents the choice follows the bundled
+  module's absolute co_filename when it has one, then a generated source,
+  then the task's own precedence (Python 3: the last search base wins,
+  Python 2: the first);
 * the module is recompiled from that source at optimize=2, with the display
   path `lib/<pythonver>/<module path>.py` that `Context.compile` uses;
 * Python 3 writes unchecked-hash pycs (the header holds a hash of the source),
@@ -20,9 +28,9 @@ headers, `lib/pythonX.Y/...` paths, still optimize 0 on Python 3).
   bytes in every engine of a Python version, which the app's bundle
   de-duplication relies on.
 
-Files named like bytecode that are not bytecode (upstream's pythonlib copies
-certifi's `.pem` files under a `.pyc` name in some versions) are left alone
-and reported.
+A bundled module without an accepted source stops the build. Files named like
+bytecode that are not bytecode (upstream's pythonlib copies certifi's `.pem`
+files under a `.pyc` name in some versions) are left alone and reported.
 """
 
 import json
@@ -37,7 +45,7 @@ OPTIMIZE = 2
 # Runs under the engine's host Python (2.7 or 3.x). stdin: JSON
 # {"mode": "verify"|"write", "items": [...]}; stdout: JSON.
 #   verify: items = [[bundled, [candidate, ...]], ...]
-#           -> {bundled: {"magic": bool, "matches": [candidate, ...]}}
+#           -> {bundled: {"magic": bool, "filename": co_filename, "matches": [candidate, ...]}}
 #           Python 3 compares at optimize 0, 1 and 2 in one process; Python 2
 #           compares at the optimization level of the process (-O/-OO flags).
 #   write:  items = [[source, destination, dfile], ...] -> {"written": n}
@@ -81,7 +89,7 @@ if request["mode"] == "verify":
         with open(bundled, "rb") as f:
             data = f.read()
         if data[:4] != MAGIC:
-            result[bundled] = {"magic": False, "matches": []}
+            result[bundled] = {"magic": False, "filename": None, "matches": []}
             continue
         old = marshal.loads(data[HEADER:])
         matches = []
@@ -91,7 +99,7 @@ if request["mode"] == "verify":
                 if code is not None and code == old:
                     matches.append(candidate)
                     break
-        result[bundled] = {"magic": True, "matches": matches}
+        result[bundled] = {"magic": True, "filename": old.co_filename, "matches": matches}
     json.dump(result, sys.stdout)
 else:
     import struct
@@ -117,29 +125,38 @@ def _helper(hostpython, flags, request):
     return json.loads(out.stdout)
 
 
-def index_sources(roots):
-    """file name -> [paths] for every .py under roots (symlinks not followed)."""
+def candidates_for(rel, bases, generated, runtime):
+    """Candidate sources of the bundled module `rel` (a path ending in .pyc/.pyo).
 
-    found = {}
-    for root in roots:
-        root = Path(root)
-        if not root.is_dir():
-            continue
-        for path in root.rglob("*.py"):
-            if path.is_file() and not path.is_symlink():
-                found.setdefault(path.name, []).append(path)
+    Returns (source path, origin) pairs: origin is the index of the search
+    base, "generated" or "runtime".
+    """
+
+    source = rel.with_suffix(".py")
+    found = [(Path(base) / source, i) for i, base in enumerate(bases) if (Path(base) / source).is_file()]
+    if generated is not None and (Path(generated) / source).is_file():
+        found.append((Path(generated) / source, "generated"))
+    if len(source.parts) == 1:
+        found += [(Path(p), "runtime") for p in sorted(runtime)]
     return found
 
 
-def candidates_for(rel, by_name, extra):
-    """Sources whose path ends with the module's path, plus `extra` for top-level modules."""
+def choose(python_major, filename, matches):
+    """Pick one of the accepted (path, origin) candidates; None if they disagree without a rule."""
 
-    want = rel.with_suffix(".py")
-    tail = want.parts
-    found = [p for p in by_name.get(want.name, []) if p.parts[-len(tail):] == tail]
-    if len(tail) == 1:
-        found += [p for p in extra if p not in found]
-    return found
+    if len({p.read_bytes() for p, _ in matches}) == 1:
+        return matches[0][0]
+    for path, _ in matches:
+        if filename and Path(filename).is_absolute() and Path(filename) == path:
+            return path
+    generated = [p for p, origin in matches if origin == "generated"]
+    if generated:
+        return generated[0]
+    from_bases = [(origin, p) for p, origin in matches if isinstance(origin, int)]
+    if from_bases:
+        from_bases.sort()
+        return from_bases[-1][1] if python_major == "3" else from_bases[0][1]
+    return None
 
 
 def write_bytecode(hostpython, python_major, items, optimize=OPTIMIZE):
@@ -152,46 +169,48 @@ def write_bytecode(hostpython, python_major, items, optimize=OPTIMIZE):
                                 "items": [[str(s), str(d), dfile] for s, d, dfile in items]})
 
 
-def recompile_stdlib(hostpython, python_major, stdlib, pythonver, source_roots, extra_sources):
-    """Recompile the bundled standard library tree `stdlib` in place; returns a report."""
+def recompile_stdlib(hostpython, python_major, stdlib, pythonver, bases, generated, runtime):
+    """Recompile the bundled standard library tree `stdlib` in place; returns a report.
+
+    bases: the pythonlib task's search bases, in its order. generated: the
+    directory holding sources the task generated and deleted, laid out like
+    `stdlib` (or None). runtime: the runtime/*.py files.
+    """
 
     stdlib = Path(stdlib)
     suffix = ".pyo" if python_major == "2" else ".pyc"
-    by_name = index_sources(source_roots)
-    extra = sorted(Path(p) for p in extra_sources)
-
     bundled = sorted(p for p in stdlib.rglob("*" + suffix) if p.is_file())
-    requests = []
-    for path in bundled:
-        rel = path.relative_to(stdlib)
-        requests.append([str(path), [str(c) for c in candidates_for(rel, by_name, extra)]])
+    candidates = {str(p): candidates_for(p.relative_to(stdlib), bases, generated, runtime) for p in bundled}
+    origins = {str(p): {str(c): o for c, o in candidates[str(p)]} for p in bundled}
 
     # Python 2 cannot choose the optimization level per compile() call.
     passes = [["-OO"], ["-O"], []] if python_major == "2" else [[]]
     verdicts = {}
     for flags in passes:
-        pending = [r for r in requests if not verdicts.get(r[0], {}).get("matches")]
+        pending = [[b, [str(c) for c, _ in candidates[b]]] for b in candidates
+                   if not verdicts.get(b, {}).get("matches")]
         if not pending:
             break
-        for bundled_path, verdict in _helper(hostpython, flags, {"mode": "verify", "items": pending}).items():
-            verdicts[bundled_path] = verdict
+        verdicts.update(_helper(hostpython, flags, {"mode": "verify", "items": pending}))
 
-    not_bytecode, unmatched, ambiguous, items = [], [], [], []
+    not_bytecode, unmatched, ambiguous, items, by_rule = [], [], [], [], []
     for path in bundled:
         rel = path.relative_to(stdlib)
         verdict = verdicts[str(path)]
         if not verdict["magic"]:
             not_bytecode.append(str(rel))
             continue
-        matches = verdict["matches"]
+        matches = [(Path(m), origins[str(path)][m]) for m in verdict["matches"]]
         if not matches:
-            unmatched.append(str(rel))
+            unmatched.append({"module": str(rel), "candidates": [str(c) for c, _ in candidates[str(path)]]})
             continue
-        contents = {Path(m).read_bytes() for m in matches}
-        if len(contents) > 1:
-            ambiguous.append({"module": str(rel), "sources": matches})
+        source = choose(python_major, verdict["filename"], matches)
+        if source is None:
+            ambiguous.append({"module": str(rel), "sources": [str(m) for m, _ in matches]})
             continue
-        items.append((Path(matches[0]), path, f"lib/{pythonver}/{rel.with_suffix('.py')}"))
+        if len({m.read_bytes() for m, _ in matches}) > 1:
+            by_rule.append({"module": str(rel), "source": str(source)})
+        items.append((source, path, f"lib/{pythonver}/{rel.with_suffix('.py')}"))
 
     if unmatched or ambiguous:
         raise SystemExit("standard library bytecode without a unique source:\n"
@@ -200,5 +219,5 @@ def recompile_stdlib(hostpython, python_major, stdlib, pythonver, source_roots, 
     before = sum(p.stat().st_size for p in bundled)
     write_bytecode(hostpython, python_major, items)
     after = sum(p.stat().st_size for p in bundled)
-    return {"recompiled": len(items), "not_bytecode": not_bytecode, "bytes_before": before,
-            "bytes_after": after}
+    return {"recompiled": len(items), "chosen_among_differing_sources": by_rule,
+            "not_bytecode": not_bytecode, "bytes_before": before, "bytes_after": after}

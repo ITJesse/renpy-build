@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE))
 
 import bundle  # noqa: E402
 import pybytecode  # noqa: E402
+import run_tasks as run_tasks_module  # noqa: E402
 import gates  # noqa: E402
 import machos  # noqa: E402
 import recipe  # noqa: E402
@@ -933,18 +934,20 @@ def engine(args):
 
     # Python standard library (pythonlib task output), recompiled from its
     # sources at optimize=2 with deterministic headers (pybytecode.py). The
-    # roots are where the pythonlib task finds modules: the target install's
-    # lib (site-packages included), pytmp (pyjnius, pyobjus, steam), source/
-    # (8.5's brotli), the committed steamapi.py and runtime/ (site.py,
-    # sitecustomize.py and sysconfig.py are compiled from runtime/ files of
-    # another name).
+    # bases are the pythonlib task's search list (the same in every version;
+    # 8.5 adds source/brotli); run_tasks.py keeps the sources the task
+    # generates in the lib tree and deletes after compiling them.
     stdlib = src / "renpy" / "lib" / pythonver
     bundle.copy_tree(stdlib, out / "python" / "lib" / pythonver)
+    target_lib = install_dir(src, "ios-arm64") / "lib" / pythonver
+    pytmp = src / "tmp" / f"py{version_cfg['python']}"
+    bases = [target_lib, target_lib / "site-packages", pytmp / "pyjnius", pytmp / "pyobjus", pytmp / "steam",
+             src / "source" / "brotli"]
     stdlib_report = pybytecode.recompile_stdlib(
         hostpython, version_cfg["python"], out / "python" / "lib" / pythonver, pythonver,
-        source_roots=[install_dir(src, "ios-arm64") / "lib" / pythonver, src / "tmp" / f"py{version_cfg['python']}",
-                      src / "source", src / "steamapi", src / "runtime"],
-        extra_sources=sorted((src / "runtime").glob("*.py")))
+        bases=[b for b in bases if b.is_dir()],
+        generated=src / run_tasks_module.GENERATED_SOURCES / pythonver,
+        runtime=sorted((src / "runtime").glob("*.py")))
     log(f"standard library: {stdlib_report['recompiled']} modules recompiled, "
         f"{stdlib_report['bytes_before']} -> {stdlib_report['bytes_after']} bytes")
 
