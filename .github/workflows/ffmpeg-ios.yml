@@ -21,6 +21,8 @@ jobs:
         run: |
           command -v cmake || brew install cmake
           command -v pkg-config || brew install pkgconf
+          command -v meson || brew install meson
+          command -v ninja || brew install ninja
       - name: Build device and simulator libraries
         run: python3 tools/build_ffmpeg_ios.py
       - name: Upload libraries and build provenance
@@ -65,8 +67,9 @@ jobs:
           set -euo pipefail
           archive="renpylinter-ffmpeg-ios-arm64.tar.gz"
           cat > release-notes.md <<EOF
-          FFmpeg 4.3.1 with libaom v3.5.0 (decoder only), configured as renpy-build's
-          tasks/ffmpeg.py and tasks/aom.py, built with Xcode at -Os (aom: MinSizeRel).
+          FFmpeg 9.0.2 with VideoToolbox decoding, dav1d 1.5.4 and libaom v3.5.0
+          (decoder only, for libavif), built with Xcode at -Os. See
+          README.renpylinter-ffmpeg.md for the configuration.
 
           - Device: arm64 (release/*.a)
           - Simulator: arm64 (debug/*.a)
@@ -74,11 +77,11 @@ jobs:
           - Source commit: $SOURCE_COMMIT
           - Minimum deployment target: iOS 15.6
 
-          The archive includes build-info.json, the FFmpeg and aom licenses and SHA256SUMS.
+          The archive includes build-info.json, the FFmpeg, libaom and dav1d licenses and SHA256SUMS.
           Build success does not establish application runtime compatibility.
           EOF
           gh release create "$RELEASE_TAG" \
             --repo "$GH_REPO" --target "$SOURCE_COMMIT" \
-            --title "FFmpeg 4.3.1 for RenPyLinter iOS ($RELEASE_TAG)" \
+            --title "FFmpeg 9.0.2 for RenPyLinter iOS ($RELEASE_TAG)" \
             --notes-file release-notes.md \
             "$archive" "$archive.sha256" bundle/build-info.json
