@@ -1,0 +1,84 @@
+name: Build FFmpeg for RenPyLinter iOS
+
+on:
+  push:
+    branches:
+      - renpylinter/ffmpeg
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          command -v cmake || brew install cmake
+          command -v pkg-config || brew install pkgconf
+      - name: Build device and simulator libraries
+        run: python3 tools/build_ffmpeg_ios.py
+      - name: Upload libraries and build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: renpylinter-ffmpeg-${{ github.sha }}
+          path: dist/renpylinter-ffmpeg/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download built libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: renpylinter-ffmpeg-${{ github.sha }}
+          path: bundle
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd bundle && sha256sum --check --quiet SHA256SUMS)
+          archive="renpylinter-ffmpeg-ios-arm64.tar.gz"
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -cf - -C bundle . | gzip -n -9 > "$archive"
+          sha256sum "$archive" > "$archive.sha256"
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: renpylinter-ffmpeg-ios-arm64.tar.gz
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          RELEASE_TAG: ffmpeg-ios-${{ github.run_number }}-${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="renpylinter-ffmpeg-ios-arm64.tar.gz"
+          cat > release-notes.md <<EOF
+          FFmpeg 4.3.1 with libaom v3.5.0 (decoder only), configured as renpy-build's
+          tasks/ffmpeg.py and tasks/aom.py, built with Xcode at -Os (aom: MinSizeRel).
+
+          - Device: arm64 (release/*.a)
+          - Simulator: arm64 (debug/*.a)
+          - Public headers: include/
+          - Source commit: $SOURCE_COMMIT
+          - Minimum deployment target: iOS 15.6
+
+          The archive includes build-info.json, the FFmpeg and aom licenses and SHA256SUMS.
+          Build success does not establish application runtime compatibility.
+          EOF
+          gh release create "$RELEASE_TAG" \
+            --repo "$GH_REPO" --target "$SOURCE_COMMIT" \
+            --title "FFmpeg 4.3.1 for RenPyLinter iOS ($RELEASE_TAG)" \
+            --notes-file release-notes.md \
+            "$archive" "$archive.sha256" bundle/build-info.json
