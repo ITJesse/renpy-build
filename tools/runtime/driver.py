@@ -36,6 +36,8 @@ TOOLING = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 
 import bundle  # noqa: E402
+import pybytecode  # noqa: E402
+import run_tasks as run_tasks_module  # noqa: E402
 import gates  # noqa: E402
 import machos  # noqa: E402
 import recipe  # noqa: E402
@@ -802,9 +804,9 @@ def system_import_gate(ours, upstream, target, config):
 def compile_python(hostpython, items, python_major, mtime):
     """items: [(source, destination, display path)].
 
-    Python 3: unchecked-hash pyc. Python 2: optimized (-OO) pyo like
-    upstream's Context.compile; their headers embed the source mtime, so
-    sources are set to SOURCE_DATE_EPOCH first.
+    Optimized like upstream's Context.compile for Python 2 (-OO, see
+    pybytecode.py). Python 3: unchecked-hash pyc. Python 2: pyo, whose header
+    embeds the source mtime, so sources are set to SOURCE_DATE_EPOCH first.
     """
 
     if python_major == "2":
@@ -815,13 +817,14 @@ def compile_python(hostpython, items, python_major, mtime):
             "for src, dst, dfile in json.load(sys.stdin):\n"
             "    py_compile.compile(src, cfile=dst, dfile=dfile, doraise=True)\n"
         )
-        cmd = [str(hostpython), "-OO", "-c", script]
+        cmd = [str(hostpython), "-" + "O" * pybytecode.OPTIMIZE, "-c", script]
     else:
         script = (
             "import json, py_compile, sys\n"
             "for src, dst, dfile in json.load(sys.stdin):\n"
-            "    py_compile.compile(src, cfile=dst, dfile=dfile, doraise=True,\n"
+            "    py_compile.compile(src, cfile=dst, dfile=dfile, doraise=True, optimize=%d,\n"
             "                       invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)\n"
+            % pybytecode.OPTIMIZE
         )
         cmd = [str(hostpython), "-c", script]
     payload = json.dumps([[str(a), str(b), c] for a, b, c in items])
@@ -927,13 +930,29 @@ def engine(args):
                                           + sorted((deps_dir / "link-check" / target).glob("*.a")) + [sdl[target]])
         gate_report["system_imports"][target] = system_import_gate(ours, upstream, target, config)
 
-    # Python standard library (pythonlib task output).
+    hostpython = install_dir(src, "ios-arm64") / "bin" / f"hostpython{version_cfg['python']}"
+
+    # Python standard library (pythonlib task output), recompiled from its
+    # sources at optimize=2 with deterministic headers (pybytecode.py). The
+    # bases are the pythonlib task's search list (the same in every version;
+    # 8.5 adds source/brotli); run_tasks.py keeps the sources the task
+    # generates in the lib tree and deletes after compiling them.
     stdlib = src / "renpy" / "lib" / pythonver
     bundle.copy_tree(stdlib, out / "python" / "lib" / pythonver)
+    target_lib = install_dir(src, "ios-arm64") / "lib" / pythonver
+    pytmp = src / "tmp" / f"py{version_cfg['python']}"
+    bases = [target_lib, target_lib / "site-packages", pytmp / "pyjnius", pytmp / "pyobjus", pytmp / "steam",
+             src / "source" / "brotli"]
+    stdlib_report = pybytecode.recompile_stdlib(
+        hostpython, version_cfg["python"], out / "python" / "lib" / pythonver, pythonver,
+        bases=[b for b in bases if b.is_dir()],
+        generated=src / run_tasks_module.GENERATED_SOURCES / pythonver,
+        runtime=sorted((src / "runtime").glob("*.py")))
+    log(f"standard library: {stdlib_report['recompiled']} modules recompiled, "
+        f"{stdlib_report['bytes_before']} -> {stdlib_report['bytes_after']} bytes")
 
     # Ren'Py: pristine tag sources and the generated sources the SDK ships;
     # .py compiled, SDK-compiled scripts added.
-    hostpython = install_dir(src, "ios-arm64") / "bin" / f"hostpython{version_cfg['python']}"
     tracked = output(["git", "-C", src / "renpy", "ls-files", "renpy"]).splitlines()
     bytecode = ".pyo" if version_cfg["python"] == "2" else ".pyc"
     py_items, copied, skipped = [], [], []
@@ -1018,6 +1037,10 @@ def engine(args):
         "compile_flags": {t: compile_flags(src, t, version_cfg) for t in TARGETS},
         "archives": archives_info,
         "renpy_files": {"compiled": len(py_items), "copied": len(copied), "excluded": skipped},
+        "bytecode": {"optimize": pybytecode.OPTIMIZE,
+                     "headers": "unchecked-hash" if version_cfg["python"] == "3"
+                                else f"mtime {pybytecode.PY2_PYO_MTIME} (stdlib), SOURCE_DATE_EPOCH (renpy)",
+                     "stdlib": stdlib_report},
         "live2d_header": live2d,
         "site_packages": site_packages(install_dir(src, "ios-arm64") / "lib" / pythonver / "site-packages"),
         "gates": gate_report,
