@@ -205,12 +205,47 @@ Absolute install paths in text files (pkg-config, headers) are replaced with
 ```
 lib/release/            device: libpython, librenpy, librenpython + the deps archives
 lib/debug/              simulator, same set
-python/lib/pythonX.Y/   standard library bytecode (pythonlib task)
+python/lib/pythonX.Y/   standard library bytecode (pythonlib task, recompiled, see below)
 renpy/                  the tag's renpy/: .py compiled (.pyc, or .pyo for Python 2),
                         other files as in the tag, common .rpyc/.rpymc and
                         vc_version from the official SDK
 build-info.json  SHA256SUMS  LICENSES/
 ```
+
+### Bytecode
+
+All Python bytecode in an engine bundle is optimized at level 2 (`-OO`): no
+docstrings, no asserts, `__debug__` false, as upstream already compiles
+Ren'Py 7's `.pyo` files. Only the bundled bytecode changes; the interpreter's
+own optimization flag is untouched, so code a game compiles at run time keeps
+its asserts. Python 3 pycs are unchecked-hash, Python 2 pyos carry the
+`SOURCE_DATE_EPOCH` timestamp (Ren'Py) or a fixed 0 (standard library);
+sourceless imports check neither.
+
+The pythonlib task's output depends on the renpy-build version: 7.5, 8.0 and
+8.1 copy what `make install` left in `__pycache__` (timestamp headers,
+absolute build paths, optimize 0), newer branches recompile through
+`Context.compile` (unchecked-hash, `lib/pythonX.Y/...` paths, optimize 0 on
+Python 3). `bytecode.recompile_stdlib` (driver step after the stdlib copy)
+replaces that tree, so the policy does not depend on the branch:
+
+* each bundled module's source is identified, not guessed from its name: a
+  candidate (`.py` files under the target install's lib, pytmp, `source/`,
+  `steamapi/` and, for top-level modules, every `runtime/*.py`, which is how
+  `site.pyc` from `runtime/site3.py` is found) must compile, at one of the
+  optimization levels the tasks use, to a code object equal to the bundled
+  one. A module with no such source, or with several different ones, stops
+  the build;
+* it is recompiled from that source at optimize 2 with the display path
+  `lib/pythonX.Y/<module>.py`, the one `Context.compile` uses;
+* files that are named like bytecode but are not (some versions copy
+  certifi's `.pem` files under a `.pyc` name) are left as they are and
+  listed in build-info (`bytecode.stdlib.not_bytecode`).
+
+The same module therefore has the same bytes in every engine of a Python
+version, which the app's bundle de-duplication relies on.
+`tools/runtime/test_bytecode.py` covers source identification, the
+optimization and determinism (`PYTHON2=<python2.7>` adds the `.pyo` path).
 
 ## Gates
 
