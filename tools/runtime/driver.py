@@ -106,6 +106,13 @@ def sdl_layer(lock):
     return layer
 
 
+def ffmpeg_layer(lock):
+    """The global FFmpeg release an engine branch builds against: lock "ffmpeg"
+    (release, asset, sha256), or None where a task still builds FFmpeg (8.6)."""
+
+    return dict(lock["ffmpeg"]) if "ffmpeg" in lock else None
+
+
 def renpy_version(lock):
     """The Ren'Py version vc_version.py names: the tag, or a nightly's version."""
 
@@ -374,6 +381,35 @@ def unpack_sdl(tar_path, lock, work):
     return archives
 
 
+def unpack_ffmpeg(tar_path, lock, work):
+    layer = ffmpeg_layer(lock)
+    verify_tarball(tar_path, layer["sha256"], "FFmpeg release")
+    dest = work / "ffmpeg"
+    shutil.rmtree(dest, ignore_errors=True)
+    bundle.extract(tar_path, dest)
+    bundle.verify_sums(dest)
+    return dest
+
+
+def install_ffmpeg(src, release):
+    """Install the global FFmpeg release (its archives and public headers, with
+    libaom's for libavif) into each target's tree, where the deps tasks and
+    librenpy find them, as a task-built FFmpeg would be."""
+
+    installed = {}
+    for target in TARGETS:
+        install = install_dir(src, target)
+        (install / "lib").mkdir(parents=True, exist_ok=True)
+        archives = sorted((release / ENGINE_FOLDER[target]).glob("*.a"))
+        if not archives:
+            raise SystemExit(f"FFmpeg release has no {ENGINE_FOLDER[target]}/ archives")
+        for archive in archives:
+            shutil.copy2(archive, install / "lib" / archive.name)
+        bundle.copy_tree(release / "include", install / "include")
+        installed[target] = [a.name for a in archives]
+    return installed
+
+
 def check_branch(src, lock, version):
     if lock["engine"] != version:
         raise SystemExit(f"{src} is the {lock['engine']} branch, not {version}")
@@ -516,6 +552,14 @@ def deps(args):
                          f"checkout computes {computed['recipe_sha256']}")
 
     series.apply(src)
+    ffmpeg = ffmpeg_layer(lock)
+    if ffmpeg is not None:
+        if args.ffmpeg is None:
+            raise SystemExit(f"the lock pins {ffmpeg['release']}; pass it with --ffmpeg")
+        if {"ffmpeg", "aom"} & set(family["deps_modules"]):
+            raise SystemExit("deps_modules build FFmpeg/aom, but the lock pins the global FFmpeg release")
+        ffmpeg_release = unpack_ffmpeg(args.ffmpeg, lock, src / "tmp" / "rpl-inputs")
+        ffmpeg["installed"] = install_ffmpeg(src, ffmpeg_release)
     run_tasks(src, lock, config["versions"][source_version]["python"], family["deps_modules"])
 
     if out.exists():
@@ -548,7 +592,9 @@ def deps(args):
 
         check = out / "link-check" / target
         check.mkdir(parents=True)
-        for name in config["link_check_archives"]:
+        # Families on the global FFmpeg release check against its archives;
+        # the others against the FFmpeg/aom their tasks built.
+        for name in (ffmpeg["installed"][target] if ffmpeg is not None else config["link_check_archives"]):
             shutil.copy2(lib / name, check / name)
 
     markers = out / "done-markers"
@@ -561,6 +607,10 @@ def deps(args):
             (markers / marker.name).write_text("renpylinter deps bundle\n")
 
     licenses = collect_licenses(src, sorted(packaged), out / "LICENSES")
+    if ffmpeg is not None:
+        # FFmpeg, dav1d and aom, as the release ships their licenses.
+        bundle.copy_tree(ffmpeg_release / "LICENSES", out / "LICENSES" / "ffmpeg")
+        licenses["ffmpeg"] = sorted(f"ffmpeg/{p.name}" for p in (out / "LICENSES" / "ffmpeg").iterdir())
 
     # Gates.
     gate_report = {"platforms": {}, "links": {}, "exports": {}}
@@ -626,8 +676,12 @@ def deps(args):
         "archives": info_targets,
         "relocated_files": relocated,
         "install_prefix_placeholder": bundle.PREFIX_PLACEHOLDER,
-        "link_check_note": "link-check/ holds FFmpeg and aom built in this tree, used only by the link "
-                           "gates. The application links the global FFmpeg layer instead.",
+        "ffmpeg": ffmpeg,
+        "link_check_note": ("link-check/ holds the global FFmpeg release's archives (FFmpeg, dav1d, aom), "
+                            "used only by the link gates; the application links that release."
+                            if ffmpeg is not None else
+                            "link-check/ holds FFmpeg and aom built in this tree, used only by the link "
+                            "gates. The application links the global FFmpeg layer instead."),
         "licenses": licenses,
         "gates": gate_report,
         "source_date_epoch": commit_time(src),
@@ -845,6 +899,13 @@ def engine(args):
         raise SystemExit("lock and families.json disagree on the family")
 
     deps_dir, deps_sums, deps_info = unpack_deps(src, lock, args.deps, args.trial)
+    # The FFmpeg headers librenpy compiles against came with the deps layer;
+    # they must be the release the app links (the lock's).
+    ffmpeg = ffmpeg_layer(lock)
+    built_with = deps_info.get("ffmpeg")
+    if (ffmpeg or {}).get("sha256") != (built_with or {}).get("sha256") and not args.trial:
+        raise SystemExit(f"lock pins FFmpeg {ffmpeg and ffmpeg['release']}, the deps release was built with "
+                         f"{built_with and built_with['release']}")
     sdl = unpack_sdl(args.sdl, lock, src / "tmp" / "rpl-inputs")
     sdk_compiled, sdk_stale, renpy_license, vc_version, sdk_generated = check_sdk(
         src, lock, args.sdk, src / "tmp" / "rpl-inputs")
@@ -1026,6 +1087,7 @@ def engine(args):
         "deps": {"release": lock["deps"]["release"], "sha256": lock["deps"]["sha256"],
                  "tooling_commit": deps_info["tooling_commit"]},
         "sdl": sdl_layer(lock),
+        "ffmpeg": ffmpeg,
         "renpy_sdk": {**lock["renpy_sdk"], "compiled_scripts": len(sdk_compiled) - len(source_only_scripts),
                       "patched_source_scripts": source_only_scripts,
                       "stale_in_sdk": sdk_stale, "license_from": str(renpy_license.name)},
@@ -1095,6 +1157,7 @@ def main():
     p.add_argument("--src", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--sdl", "--sdl2", type=Path, required=True, help="global SDL layer release tarball")
+    p.add_argument("--ffmpeg", type=Path, help="global FFmpeg release tarball (when the lock pins one)")
     p.add_argument("--previous", type=Path)
     p.add_argument("--previous-tag")
     p.add_argument("--source-version")

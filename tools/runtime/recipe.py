@@ -7,9 +7,11 @@ The hash covers, for every module in a family's ``deps_modules``:
 * every ``source/`` input it unpacks, resolved through its ``version``,
 * every ``patches/`` file or directory it applies,
 
-which includes the branch's RenPyLinter patches applied by those tasks.
-Root patches (runtime/ sources) belong to the engine layer and are not
-part of the hash. Two
+which includes the branch's RenPyLinter patches applied by those tasks, and
+the global FFmpeg release when the branch's lock pins one (``ffmpeg``):
+that layer is installed into the build tree instead of a task building
+FFmpeg. Root patches (runtime/ sources) belong to the engine layer and are
+not part of the hash. Two
 checkouts with the same hash build the same dependency layer, which is what
 ``families.json`` groups engines by.
 
@@ -73,11 +75,26 @@ def module_inputs(root, module):
     return inputs
 
 
+def global_ffmpeg(root):
+    """The global FFmpeg release the branch's lock pins, or None."""
+
+    lock = root / "renpylinter.lock.json"
+    if not lock.is_file():
+        return None
+    layer = json.loads(lock.read_text()).get("ffmpeg")
+    return layer["sha256"] if layer else None
+
+
 def compute(root, modules):
     root = Path(root).resolve()
     detail = {m: module_inputs(root, m) for m in modules}
-    canonical = json.dumps(detail, sort_keys=True, separators=(",", ":")).encode()
-    return {"recipe_sha256": hashlib.sha256(canonical).hexdigest(), "modules": detail}
+    ffmpeg = global_ffmpeg(root)
+    hashed = detail if ffmpeg is None else {"modules": detail, "global_ffmpeg": ffmpeg}
+    canonical = json.dumps(hashed, sort_keys=True, separators=(",", ":")).encode()
+    result = {"recipe_sha256": hashlib.sha256(canonical).hexdigest(), "modules": detail}
+    if ffmpeg is not None:
+        result["global_ffmpeg"] = ffmpeg
+    return result
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ immutable GitHub Releases.
 
 | Layer | Contents | Release |
 | --- | --- | --- |
-| Global | SDL2 (up to 8.5) or SDL3 (8.6), FFmpeg (6 libraries) + aom, MetalANGLE | `sdl2-ios-*` (branch `renpylinter/sdl2`), `sdl3-ios-*` (branch `renpylinter/sdl3`); FFmpeg and MetalANGLE are not rebuilt here |
+| Global | SDL2 (up to 8.5) or SDL3 (8.6), FFmpeg (FFmpeg 9 + dav1d + aom), MetalANGLE | `sdl2-ios-*` (branch `renpylinter/sdl2`), `sdl3-ios-*` (branch `renpylinter/sdl3`), `ffmpeg-ios-*` (branch `renpylinter/ffmpeg`); MetalANGLE is not rebuilt here |
 | Family deps | OpenSSL, FreeType, HarfBuzz (+subset, +cairo stub), FriBidi, libpng, libjpeg-turbo, libwebp (+demux, +mux, sharpyuv), libavif, Brotli, bzip2, xz, zlib, libffi, libyuv, assimp (modern, sdl3), SDL2_image + SDL2main or SDL3_image, mockrt | `deps-<family>-r<N>` |
 | Engine | libpython, librenpy, librenpython, standard library bytecode, Ren'Py bytecode and common | `renpy-<version>-r<N>` |
 
@@ -29,6 +29,22 @@ SDL's `SDL_revision.h` (the enclosing git commit; SDL is not shipped) and
 OpenSSL's build timestamp in `cversion.o`, all 1143 files were identical. The
 ancient engines (7.5.3, 8.0.3) link against the legacy layer and pass every
 gate, so no separate ancient layer exists.
+
+### The global FFmpeg layer
+
+The app links one `FFmpeg.framework`, built on `renpylinter/ffmpeg` and
+released as `ffmpeg-ios-*` (FFmpeg 9 with VideoToolbox, dav1d, and aom for
+libavif; see that branch's README). Every engine branch of the `legacy` and
+`modern` families pins it in `renpylinter.lock.json` (`ffmpeg`: release,
+asset, sha256). The deps build installs that release (archives and public
+headers) into the build tree before the tasks run, so libavif links its aom
+and librenpy compiles against its headers; `deps_modules` no longer contain
+`ffmpeg` or `aom`, and the recipe hash includes the release's sha256. The
+deps bundle records it (`build-info.json` `ffmpeg`), ships its licenses
+under `LICENSES/ffmpeg/`, and its `link-check/` holds the release's archives.
+An engine build refuses a deps release built with another FFmpeg than its
+lock pins. The `sdl3` family (8.6, not in the app) still builds FFmpeg 4.3.1
+and aom with tasks.
 
 ## Branches
 
@@ -191,7 +207,7 @@ The build host reproduces upstream's Ubuntu host where it matters:
 ```
 ios-arm64/{lib,include}/       device archives, headers (incl. SDL2/FFmpeg headers for engine builds)
 ios-sim-arm64/{lib,include}/   simulator
-link-check/<target>/           FFmpeg + aom from the same tree, used only by link gates
+link-check/<target>/           the global FFmpeg release's archives (sdl3: FFmpeg + aom from the same tree), used only by link gates
 done-markers/                  renpy-build completion markers restored by engine builds
 exports/<target>.txt           exported symbols per archive, for the no-removal gate
 build-info.json  SHA256SUMS  LICENSES/

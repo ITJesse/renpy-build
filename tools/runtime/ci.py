@@ -103,6 +103,15 @@ def sdl_path():
     return INPUTS / "sdl" / driver.sdl_layer(lock())["asset"]
 
 
+def ffmpeg_input():
+    """Download the global FFmpeg release the lock pins, if any; return its path."""
+
+    layer = driver.ffmpeg_layer(lock())
+    if layer is None:
+        return None
+    return download_release_asset(layer["release"], layer["asset"], INPUTS / "ffmpeg")
+
+
 def base_ref(args):
     """The upstream renpy-build ref the branch is based on, for `git fetch`."""
 
@@ -120,6 +129,7 @@ def upstream_renios_path():
 def deps_inputs(args):
     l = lock()
     sdl_input()
+    ffmpeg_input()
     fetch_url(l["upstream_renios"]["url"], upstream_renios_path())
     prefix = f"deps-{env('FAMILY')}-r"
     previous = revisions(prefix)
@@ -135,6 +145,9 @@ def deps_build(args):
     cmd = [sys.executable, "-u", str(HERE / "driver.py"), "deps", "--family", env("FAMILY"),
            "--src", str(SRC), "--out", str(out), "--sdl", str(sdl_path()),
            "--upstream-renios", str(upstream_renios_path())]
+    ffmpeg = driver.ffmpeg_layer(lock())
+    if ffmpeg is not None:
+        cmd += ["--ffmpeg", str(INPUTS / "ffmpeg" / ffmpeg["asset"])]
     if env("SOURCE_VERSION"):
         cmd += ["--source-version", version]
     previous = INPUTS / "previous" / f"deps-{env('FAMILY')}-ios.tar.gz"
