@@ -81,3 +81,18 @@ renpy-live2d-canvas-masks.diff root
 # one uses as a mask, backported from Ren'Py 8.4 (2f6fd4d6, abc68d5b).
 # Applied after the mask sizing patch.
 renpy-live2d-skip-unused-drawables.diff root
+
+# FFmpeg 9 (the global ffmpeg-ios layer, renpylinter/ffmpeg, which the deps
+# layer now installs instead of building FFmpeg 4.3.1) removed APIs this
+# ffmedia.c uses. Upstream ported it to newer FFmpeg; this backports those
+# commits as they apply here: dbdb439cc (ffmedia.c part), b120f82f9.
+renpy-ffmpeg9-api.diff root
+
+# Decode video with VideoToolbox when the device has a hardware decoder for
+# the stream (H.263, H.264, HEVC, MPEG-1/2/4, VP9, AV1), falling back to
+# FFmpeg's software decoders; hardware frames are copied into ordinary ones,
+# so everything after decoding is unchanged. AV1 uses FFmpeg's av1 decoder
+# (hardware only) when VTIsHardwareDecodeSupported, dav1d otherwise. Each
+# stream's first frame logs its decoder through the app's
+# RenPyLinterEngineLog (looked up with dlsym), else stderr.
+renpy-ffmedia-videotoolbox.diff root
