@@ -106,3 +106,9 @@ renpy-ffmedia-videotoolbox.diff root
 # compiles every tracked .py); nothing imports them, config.hw_video stays
 # a harmless setting, as upstream left it.
 renpy-remove-hw-video.diff root
+
+# Keep the modern texture-only cache on iOS for legacy stories.
+renpy-ios-legacy-surface-cache.diff root
+
+# Do not recycle zero-sized GL1 names retaining MetalANGLE image views.
+renpy-ios-delete-retired-textures.diff root
