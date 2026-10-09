@@ -62,20 +62,26 @@
  cdef bint is_vs(unsigned int char):
      if 0xfe00 <= char <= 0xfe0f: # VS1-16
          return True
-@@ -187,6 +241,12 @@
+@@ -186,6 +240,18 @@
+         unsigned long offset
  
          public object fn
- 
++
 +    def __cinit__(self, *args, **kwargs):
 +        _object_created()
 +
 +    def __dealloc__(self):
-+        _object_destroyed()
++        # Backport of upstream 6c948bf (Ren'Py 8.3). The face reads through
++        # self.stream, which lives in this object; left open, the deferred
++        # FT_Done_FreeType closed it after this memory was freed.
++        if self.face != NULL and library != NULL:
++            FT_Done_Face(self.face)
 +
++        _object_destroyed()
+ 
      def __init__(self, f, index, fn):
  
-         cdef int error
-@@ -268,6 +328,8 @@
+@@ -268,6 +334,8 @@
          int hinting
  
      def __cinit__(self):
@@ -84,7 +90,7 @@
          for i from 0 <= i < 256:
              self.cache[i].index = -1
              FT_Bitmap_New(&(self.cache[i].bitmap))
-@@ -275,15 +337,19 @@
+@@ -275,15 +343,19 @@
          init_gsubtable(&self.gsubtable)
  
      def __dealloc__(self):
