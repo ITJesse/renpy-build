@@ -1,0 +1,74 @@
+diff --git a/renpy/renpy/audio/audio.py b/renpy/renpy/audio/audio.py
+index 2f4a596..83d4674 100644
+--- a/renpy/renpy/audio/audio.py
++++ b/renpy/renpy/audio/audio.py
+@@ -763,20 +763,6 @@ class Channel(object):
+ 
+         return renpysound.video_ready(self.number)
+ 
+-# Use unconditional imports so these files get compiled during the build
+-# process.
+-
+-
+-try:
+-    from renpy.audio.androidhw import AndroidVideoChannel
+-except Exception:
+-    pass
+-
+-try:
+-    from renpy.audio.ioshw import IOSVideoChannel
+-except Exception:
+-    pass
+-
+ # A list of channels we know about.
+ all_channels = [ ]
+ 
+@@ -850,12 +836,7 @@ def register_channel(name,
+     if not force and not renpy.game.context().init_phase and (" " not in name):
+         raise Exception("Can't register channel outside of init phase.")
+ 
+-    if renpy.android and renpy.config.hw_video and name == "movie":
+-        c = AndroidVideoChannel(name, default_loop=loop, file_prefix=file_prefix, file_suffix=file_suffix)
+-    elif renpy.ios and renpy.config.hw_video and name == "movie":
+-        c = IOSVideoChannel(name, default_loop=loop, file_prefix=file_prefix, file_suffix=file_suffix)
+-    else:
+-        c = Channel(name, loop, stop_on_mute, tight, file_prefix, file_suffix, buffer_queue, movie=movie, framedrop=framedrop)
++    c = Channel(name, loop, stop_on_mute, tight, file_prefix, file_suffix, buffer_queue, movie=movie, framedrop=framedrop)
+ 
+     c.mixer = mixer
+ 
+diff --git a/renpy/renpy/common/00compat.rpy b/renpy/renpy/common/00compat.rpy
+index a29208b..15f7a7b 100644
+--- a/renpy/renpy/common/00compat.rpy
++++ b/renpy/renpy/common/00compat.rpy
+@@ -208,7 +208,6 @@ init -1100 python:
+         if version <= (7, 3, 5):
+             config.side_image_requires_attributes = False
+             config.window_functions_set_auto = False
+-            config.hw_video = True
+             config.who_what_sub_compat = 0
+ 
+         if version <= (7, 4, 0):
+diff --git a/renpy/renpy/display/video.py b/renpy/renpy/display/video.py
+index ec3db4a..4840bbf 100644
+--- a/renpy/renpy/display/video.py
++++ b/renpy/renpy/display/video.py
+@@ -417,9 +417,6 @@ class Movie(renpy.display.core.Displayable):
+ 
+         self.play_callback = play_callback
+ 
+-        if (self.channel == "movie") and (renpy.config.hw_video) and renpy.mobile:
+-            raise Exception("Movie(channel='movie') doesn't work on mobile when config.hw_video is true. (Use a different channel argument.)")
+-
+     def render(self, width, height, st, at):
+ 
+         if self._play and not (renpy.game.preferences.video_image_fallback is True):
+@@ -588,7 +585,7 @@ def frequent():
+ 
+         return False
+ 
+-    elif fullscreen and not ((renpy.android or renpy.ios) and renpy.config.hw_video):
++    elif fullscreen:
+ 
+         c = renpy.audio.audio.get_channel("movie")
+ 
