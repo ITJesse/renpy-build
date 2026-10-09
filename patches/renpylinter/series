@@ -61,3 +61,12 @@ pyobjus-owned-returns.diff task:pyobjus
 
 # Pack oversized parent rows in straight and premultiplied GL uploads.
 renpy-pack-texture-upload.diff root
+
+# Decode video with VideoToolbox when the device has a hardware decoder for
+# the stream (H.263, H.264, HEVC, MPEG-1/2/4, VP9, AV1), falling back to
+# FFmpeg's software decoders; hardware frames are copied into ordinary ones,
+# so everything after decoding is unchanged. AV1 uses FFmpeg's av1 decoder
+# (hardware only) when VTIsHardwareDecodeSupported, dav1d otherwise. Each
+# stream's first frame logs its decoder through the app's
+# RenPyLinterEngineLog (looked up with dlsym), else stderr.
+renpy-ffmedia-videotoolbox.diff root
