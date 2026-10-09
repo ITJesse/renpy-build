@@ -1,0 +1,205 @@
+--- a/renpy/src/ffmedia.c
++++ b/renpy/src/ffmedia.c
+@@ -12,7 +12,107 @@
+ 
+ #ifndef _WIN32
+ #define USE_POSIX_MEMALIGN
++#endif
++
++/* RenPyLinter: VideoToolbox decoding ****************************************/
++
++/* Video streams are decoded by VideoToolbox when the device has a hardware
++ * decoder for them and by FFmpeg's software decoders otherwise; the frames
++ * VideoToolbox returns are copied into ordinary frames, so everything after
++ * decoding is unchanged. Each stream's first frame logs which one decoded
++ * it, through the host app's log when the app provides one. */
++
++#include <dlfcn.h>
++#include <stdarg.h>
++#include <libavutil/hwcontext.h>
++#include <libavutil/pixdesc.h>
++
++#if defined(__APPLE__)
++#include <VideoToolbox/VideoToolbox.h>
++#define RPL_VIDEOTOOLBOX 1
++#endif
++
++static void rpl_log(const char *format, ...) {
++	/* Looked up at run time: the engine links without the host app. */
++	static void (*host_log)(const char *) = NULL;
++	static int looked_up = 0;
++
++	if (!looked_up) {
++		host_log = (void (*)(const char *)) dlsym(RTLD_DEFAULT, "RenPyLinterEngineLog");
++		looked_up = 1;
++	}
++
++	char message[512];
++	va_list args;
++	va_start(args, format);
++	vsnprintf(message, sizeof(message), format, args);
++	va_end(args);
++
++	if (host_log) {
++		host_log(message);
++	} else {
++		fprintf(stderr, "%s\n", message);
++	}
++}
++
++/* The decoder for a stream. AV1: FFmpeg prefers dav1d (software); its own
++ * av1 decoder only drives hardware, so it is chosen when the device has an
++ * AV1 hardware decoder. */
++static const AVCodec *rpl_find_decoder(AVCodecContext *codec_ctx) {
++	const AVCodec *codec = NULL;
++
++#ifdef RPL_VIDEOTOOLBOX
++	if (codec_ctx->codec_id == AV_CODEC_ID_AV1 && VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)) {
++		codec = avcodec_find_decoder_by_name("av1");
++	}
++#endif
++
++	if (codec == NULL) {
++		codec = avcodec_find_decoder(codec_ctx->codec_id);
++	}
++
++	if (codec == NULL) {
++		rpl_log("RenPyLinter media: no decoder for %s", avcodec_get_name(codec_ctx->codec_id));
++	}
++
++	return codec;
++}
++
++/* VideoToolbox when offered; otherwise (no hardware decoder for the stream:
++ * FFmpeg asks again without it) the first software format. */
++static enum AVPixelFormat rpl_get_format(AVCodecContext *codec_ctx, const enum AVPixelFormat *formats) {
++	const enum AVPixelFormat *p;
++
++	for (p = formats; *p != AV_PIX_FMT_NONE; p++) {
++		if (*p == AV_PIX_FMT_VIDEOTOOLBOX) {
++			return *p;
++		}
++	}
++
++	for (p = formats; *p != AV_PIX_FMT_NONE; p++) {
++		const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(*p);
++		if (desc && !(desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
++			return *p;
++		}
++	}
++
++	return AV_PIX_FMT_NONE;
++}
++
++static void rpl_setup_decoder(AVFormatContext *ctx, int index, AVCodecContext *codec_ctx) {
++#ifdef RPL_VIDEOTOOLBOX
++	if (ctx->streams[index]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
++		return;
++	}
++
++	AVBufferRef *device = NULL;
++	if (av_hwdevice_ctx_create(&device, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) == 0) {
++		/* Owned by the context from now on. */
++		codec_ctx->hw_device_ctx = device;
++		codec_ctx->get_format = rpl_get_format;
++	}
+ #endif
++}
+ 
+ /* Should a mono channel be split into two equal stero channels (true) or
+  * should the energy be split onto two stereo channels with 1/2 the energy
+@@ -255,6 +355,11 @@
+ 	/* Software rescaling context. */
+ 	struct SwsContext *sws;
+ 
++	/* RenPyLinter: the format of the last video frame (see
++	 * rpl_receive_video_frame), and whether its decoder was logged. */
++	int rpl_video_format;
++	int rpl_video_logged;
++
+ 	/* A queue of decoded video frames. */
+ 	SurfaceQueueEntry *surface_queue; // Lock
+ 	int surface_queue_size; // Lock
+@@ -604,7 +709,7 @@
+ 
+ 	codec_ctx->pkt_timebase = ctx->streams[index]->time_base;
+ 
+-    codec = avcodec_find_decoder(codec_ctx->codec_id);
++    codec = rpl_find_decoder(codec_ctx);
+ 
+     if (codec == NULL) {
+         goto fail;
+@@ -615,6 +720,8 @@
+     av_dict_set(&opts, "threads", "auto", 0);
+     av_dict_set(&opts, "refcounted_frames", "0", 0);
+ 
++	rpl_setup_decoder(ctx, index, codec_ctx);
++
+ 	if (avcodec_open2(codec_ctx, codec, &opts)) {
+ 		goto fail;
+ 	}
+@@ -803,6 +910,52 @@
+ }
+ 
+ 
++/* RenPyLinter: a frame VideoToolbox decoded becomes an ordinary frame in
++ * place. A change of frame format (hardware to software) recreates the
++ * scaler. */
++static int rpl_receive_video_frame(MediaState *ms) {
++	AVFrame *frame = ms->video_decode_frame;
++	int hardware = (frame->format == AV_PIX_FMT_VIDEOTOOLBOX);
++
++	if (hardware) {
++		AVFrame *software = av_frame_alloc();
++		if (software == NULL) {
++			return AVERROR(ENOMEM);
++		}
++
++		int ret = av_hwframe_transfer_data(software, frame, 0);
++		if (ret >= 0) {
++			ret = av_frame_copy_props(software, frame);
++		}
++		if (ret < 0) {
++			rpl_log("RenPyLinter video: could not copy a VideoToolbox frame (%d)", ret);
++			av_frame_free(&software);
++			return ret;
++		}
++
++		av_frame_unref(frame);
++		av_frame_move_ref(frame, software);
++		av_frame_free(&software);
++	}
++
++	if (!ms->rpl_video_logged) {
++		ms->rpl_video_logged = 1;
++		rpl_log("RenPyLinter video: %s %dx%d decoded by %s",
++			avcodec_get_name(ms->video_context->codec_id), frame->width, frame->height,
++			hardware ? "VideoToolbox" : ms->video_context->codec->name);
++	}
++
++	if (frame->format != ms->rpl_video_format) {
++		if (ms->sws) {
++			sws_freeContext(ms->sws);
++			ms->sws = NULL;
++		}
++		ms->rpl_video_format = frame->format;
++	}
++
++	return 0;
++}
++
+ static SurfaceQueueEntry *decode_video_frame(MediaState *ms) {
+ 	int ret;
+ 
+@@ -836,6 +989,11 @@
+ 		break;
+ 	}
+ 
++	if (rpl_receive_video_frame(ms) < 0) {
++		ms->video_finished = 1;
++		return NULL;
++	}
++
+ 	double pts = ms->video_decode_frame->best_effort_timestamp * av_q2d(ms->ctx->streams[ms->video_stream]->time_base);
+ 
+ 	if (pts < ms->skip) {
