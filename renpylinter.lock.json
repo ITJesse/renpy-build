@@ -26,6 +26,12 @@
     "release": "sdl2-ios-6-1",
     "sha256": "fd7939521f4f5d5357de7016eb87cbe90c5ce0730b018b9d0f1f87be883380b1"
   },
+  "ffmpeg": {
+    "release": "ffmpeg-ios-2-1",
+    "asset": "renpylinter-ffmpeg-ios-arm64.tar.gz",
+    "sha256": "b58a66b84091156964d07f37c412f9cd38db719a6cc55a65067540ad441f7096",
+    "commit": "7db4a2f5f2cdfb3eab10d2a899a8c802b3621f2c"
+  },
   "live2d_header": {
     "sdk": "CubismSdkForNative-5-r.5",
     "file": "Core/include/Live2DCubismCore.h",
@@ -33,7 +39,7 @@
     "secret": "LIVE2D_CUBISM_CORE_H",
     "note": "Compile time only, for renpy.gl2.live2dmodel; not redistributed. Upstream uses CubismSdkForNative-4-r.6.2; the declarations live2dmodel uses are unchanged (checked by the live2d ABI gate)."
   },
-  "patches_sha256": "ba60f1d643226a57e9d4f8b67fdf8fc5e194e0832b74c8f7c1f8532260eb6e2c",
+  "patches_sha256": "bec42ac7e078fbe0d5457df7465398a203843b27f76c428d9e591298f578913d",
   "targets": [
     "ios-arm64",
     "ios-sim-arm64"
