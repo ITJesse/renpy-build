@@ -595,6 +595,7 @@
     "_kCVPixelBufferWidthKey": "CoreVideo <CoreVideo/CVPixelBuffer.h>, iOS 4.0 (FFmpeg 9.0.2 VideoToolbox decoding in the global ffmpeg-ios layer).",
     "_ldexpf": "libm <math.h>, C99, iOS 2.0 (FFmpeg 9.0.2 VideoToolbox decoding in the global ffmpeg-ios layer).",
     "_log2": "libSystem libm (C99), iOS 2.0.",
+    "_log2f": "libm <math.h>, C99, iOS 2.0 (aacsbr.o: the AAC decoder of FFmpeg 9.0.2 in the global ffmpeg-ios layer; upstream's 7.5.3 and 8.0.3 builds did not use it).",
     "_malloc_create_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
     "_malloc_destroy_zone": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
     "_malloc_set_zone_name": "libSystem malloc zones, iOS 2.0 (RenPyPythonSession patch).",
