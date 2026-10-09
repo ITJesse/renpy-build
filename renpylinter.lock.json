@@ -14,8 +14,8 @@
   },
   "deps": {
     "family": "modern",
-    "release": "deps-modern-r2",
-    "sha256": "440419abffb84ddaf02e622702fed7126fea83d07f91d84f6df05f50abcb005a"
+    "release": "deps-modern-r3",
+    "sha256": "b191b9044b94a773b2e83a02f032fd4e476c0bd377bff80f63e73efb5d4d5040"
   },
   "sdl2": {
     "release": "sdl2-ios-6-1",
