@@ -1,0 +1,28 @@
+--- a/renpy/renpy/gl/gltexture.pyx
++++ b/renpy/renpy/gl/gltexture.pyx
+@@ -277,6 +277,14 @@
+     This releases the space associated with a texture number on the GPU,
+     and adds the number back on the free pool.
+     """
++
++    # iOS uses MetalANGLE. Its empty-image redefinition keeps the old
++    # image views in TextureMtl::mTexImageDefs, so a zero-sized pooled GL
++    # name can still retain its former Metal storage. Really delete retired
++    # names here; keep the Nvidia name-recycling optimization elsewhere.
++    if renpy.ios:
++        glDeleteTextures(1, &n)
++        return
+ 
+     glBindTexture(GL_TEXTURE_2D, n)
+ 
+@@ -532,9 +540,9 @@
+         if texture_generation[self.number] == self.generation:
+             delete_texture_number(self.number)
+ 
++        texture_numbers.discard(self.number)
+         self.number = 0
+ 
+-        texture_numbers.discard(self.number)
+         total_texture_size -= self.width * self.height * 4
+         texture_count -= 1
+ 
