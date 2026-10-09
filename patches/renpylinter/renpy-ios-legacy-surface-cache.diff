@@ -1,0 +1,17 @@
+--- a/renpy/renpy/common/00compat.rpy
++++ b/renpy/renpy/common/00compat.rpy
+@@ -173,7 +173,13 @@
+         if version <= (6, 99, 14):
+             config.image_cache_size_mb = None
+             config.image_cache_size = 16
+-            config.cache_surfaces = True
++            # On iOS, retain the uploaded texture, not a second CPU copy of
++            # every animation frame. The modern im.Cache.get path reloads a
++            # Surface on demand for image manipulators even with a cached
++            # texture, so legacy im.* operations keep their original pixels.
++            # Desktop compatibility is unchanged; games can still explicitly
++            # opt into Surface caching after applying their compatibility.
++            config.cache_surfaces = not renpy.ios
+             config.optimize_texture_bounds = False
+ 
+         if version <= (6, 99, 14, 3):
