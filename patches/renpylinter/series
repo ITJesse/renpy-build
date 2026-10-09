@@ -71,3 +71,6 @@ renpy-pack-texture-upload.diff root
 # stream's first frame logs its decoder through the app's
 # RenPyLinterEngineLog (looked up with dlsym), else stderr.
 renpy-ffmedia-videotoolbox.diff root
+
+# Keep the modern texture-only cache on iOS for legacy stories.
+renpy-ios-legacy-surface-cache.diff root
