@@ -41,7 +41,10 @@ pyobjus-free-call-result-buffer-9c0ca61.diff task:pyobjus
 # modules stayed on the default heap per session. Adds quit(), which the
 # host's main.py calls at shutdown: it destroys the library at once when no
 # face / font object is alive and otherwise from the last __dealloc__, so
-# bitmaps, strokers and faces still go through FreeType.
+# bitmaps, strokers and faces still go through FreeType. FTFace / HBFace
+# also close their face in __dealloc__, as upstream does from 8.3 on:
+# FT_Done_FreeType otherwise closed faces whose objects, and the
+# FT_StreamRec inside them, were already freed.
 renpy-freetype-quit.diff root
 
 # pyobjus' autoclass() instantiates the class it builds and parks that
